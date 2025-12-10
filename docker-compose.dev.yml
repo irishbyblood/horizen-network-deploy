@@ -1,0 +1,64 @@
+version: '3.8'
+
+# Development override configuration
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  nginx:
+    volumes:
+      - ./public:/usr/share/nginx/html:rw
+    ports:
+      - "80:80"
+      - "8080:80"  # Alternative dev port
+
+  druid-coordinator:
+    ports:
+      - "8081:8081"  # Expose coordinator UI
+    environment:
+      - DRUID_HEAP_SIZE=2g
+      - DRUID_MAX_DIRECT_SIZE=2g
+
+  druid-broker:
+    ports:
+      - "8082:8082"  # Expose broker port
+    environment:
+      - DRUID_HEAP_SIZE=2g
+      - DRUID_MAX_DIRECT_SIZE=2g
+
+  druid-router:
+    ports:
+      - "8888:8888"  # Expose router UI
+    environment:
+      - DRUID_HEAP_SIZE=512m
+      - DRUID_MAX_DIRECT_SIZE=512m
+
+  druid-historical:
+    environment:
+      - DRUID_HEAP_SIZE=2g
+      - DRUID_MAX_DIRECT_SIZE=2g
+
+  druid-middlemanager:
+    environment:
+      - DRUID_HEAP_SIZE=2g
+      - DRUID_MAX_DIRECT_SIZE=2g
+
+  postgres:
+    ports:
+      - "5432:5432"  # Expose PostgreSQL for debugging
+    environment:
+      - POSTGRES_PASSWORD=devpassword
+
+  mongodb:
+    ports:
+      - "27017:27017"  # Expose MongoDB for debugging
+    environment:
+      - MONGO_INITDB_ROOT_PASSWORD=devpassword
+
+  redis:
+    ports:
+      - "6379:6379"  # Expose Redis for debugging
+    command: redis-server --requirepass devpassword
+
+  zookeeper:
+    ports:
+      - "2181:2181"  # Expose ZooKeeper for debugging

@@ -1,0 +1,191 @@
+version: '3.8'
+
+services:
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: horizen-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./public:/usr/share/nginx/html:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - druid-router
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # ZooKeeper for Druid coordination
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: horizen-zookeeper
+    environment:
+      - ZOO_MY_ID=1
+      - ZOO_SERVERS=server.1=zookeeper:2888:3888;2181
+    volumes:
+      - zookeeper-data:/data
+      - zookeeper-logs:/datalog
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # PostgreSQL for Druid metadata
+  postgres:
+    image: postgres:15-alpine
+    container_name: horizen-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-druid}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=${POSTGRES_DB:-druid_metadata}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - horizen-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-druid}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Apache Druid Coordinator
+  druid-coordinator:
+    image: apache/druid:27.0.0
+    container_name: horizen-druid-coordinator
+    environment:
+      - DRUID_SERVICE=coordinator
+      - DRUID_HEAP_SIZE=${DRUID_HEAP_SIZE:-4g}
+      - DRUID_MAX_DIRECT_SIZE=${DRUID_MAX_DIRECT_SIZE:-4g}
+    volumes:
+      - ./druid/config:/opt/druid/conf/druid:ro
+      - druid-data:/opt/druid/var
+    depends_on:
+      - zookeeper
+      - postgres
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # Apache Druid Broker
+  druid-broker:
+    image: apache/druid:27.0.0
+    container_name: horizen-druid-broker
+    environment:
+      - DRUID_SERVICE=broker
+      - DRUID_HEAP_SIZE=${DRUID_HEAP_SIZE:-4g}
+      - DRUID_MAX_DIRECT_SIZE=${DRUID_MAX_DIRECT_SIZE:-4g}
+    volumes:
+      - ./druid/config:/opt/druid/conf/druid:ro
+      - druid-data:/opt/druid/var
+    depends_on:
+      - zookeeper
+      - postgres
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # Apache Druid Historical
+  druid-historical:
+    image: apache/druid:27.0.0
+    container_name: horizen-druid-historical
+    environment:
+      - DRUID_SERVICE=historical
+      - DRUID_HEAP_SIZE=${DRUID_HEAP_SIZE:-4g}
+      - DRUID_MAX_DIRECT_SIZE=${DRUID_MAX_DIRECT_SIZE:-4g}
+    volumes:
+      - ./druid/config:/opt/druid/conf/druid:ro
+      - druid-data:/opt/druid/var
+    depends_on:
+      - zookeeper
+      - postgres
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # Apache Druid MiddleManager
+  druid-middlemanager:
+    image: apache/druid:27.0.0
+    container_name: horizen-druid-middlemanager
+    environment:
+      - DRUID_SERVICE=middleManager
+      - DRUID_HEAP_SIZE=${DRUID_HEAP_SIZE:-4g}
+      - DRUID_MAX_DIRECT_SIZE=${DRUID_MAX_DIRECT_SIZE:-4g}
+    volumes:
+      - ./druid/config:/opt/druid/conf/druid:ro
+      - druid-data:/opt/druid/var
+    depends_on:
+      - zookeeper
+      - postgres
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # Apache Druid Router
+  druid-router:
+    image: apache/druid:27.0.0
+    container_name: horizen-druid-router
+    environment:
+      - DRUID_SERVICE=router
+      - DRUID_HEAP_SIZE=1g
+      - DRUID_MAX_DIRECT_SIZE=1g
+    volumes:
+      - ./druid/config:/opt/druid/conf/druid:ro
+    depends_on:
+      - druid-coordinator
+      - druid-broker
+    networks:
+      - horizen-network
+    restart: unless-stopped
+
+  # MongoDB for application data
+  mongodb:
+    image: mongo:7
+    container_name: horizen-mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-horizen}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-changeme}
+      - MONGO_INITDB_DATABASE=${MONGO_DB:-horizen_network}
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - horizen-network
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: horizen-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis-data:/data
+    networks:
+      - horizen-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  horizen-network:
+    driver: bridge
+
+volumes:
+  nginx-logs:
+  zookeeper-data:
+  zookeeper-logs:
+  postgres-data:
+  druid-data:
+  mongodb-data:
+  redis-data:
