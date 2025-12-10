@@ -1,9 +1,9 @@
 # Environment files with secrets
 .env
 .env.local
-.env.production
 .env.staging
-*.env
+# Note: .env.production and .env.example are templates and should be committed
+# They contain placeholders, not actual secrets
 
 # SSL Certificates
 *.pem
