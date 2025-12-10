@@ -101,7 +101,7 @@ else
 fi
 
 # Check MongoDB
-if docker-compose $COMPOSE_FILES exec -T mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
+if docker-compose $COMPOSE_FILES exec -T mongodb mongosh --quiet --eval "db.adminCommand('ping').ok" 2>/dev/null | grep -q "1"; then
     echo -e "${GREEN}✓ MongoDB is ready${NC}"
 else
     echo -e "${RED}✗ MongoDB is not ready${NC}"

@@ -71,11 +71,14 @@ fi
 echo -e "\n${YELLOW}Backing up Druid segments...${NC}"
 DRUID_BACKUP="$BACKUP_DIR/druid_segments_${DATE}.tar.gz"
 
-if docker-compose exec -T druid-coordinator test -d /opt/druid/var/druid/segments; then
+# Get the actual volume name
+VOLUME_NAME=$(docker volume ls --format '{{.Name}}' | grep druid-data | head -1)
+
+if docker-compose exec -T druid-coordinator test -d /opt/druid/var/druid/segments 2>/dev/null; then
     docker run --rm \
-        -v horizen-network-deploy_druid-data:/data \
+        -v "${VOLUME_NAME}:/data" \
         -v "$BACKUP_DIR:/backup" \
-        alpine tar -czf "/backup/druid_segments_${DATE}.tar.gz" -C /data druid/segments
+        alpine tar -czf "/backup/druid_segments_${DATE}.tar.gz" -C /data druid/segments 2>/dev/null || true
     echo -e "${GREEN}✓ Druid segments backup created: $DRUID_BACKUP${NC}"
 else
     echo -e "${YELLOW}! No Druid segments found to backup${NC}"

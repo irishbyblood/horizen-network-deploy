@@ -2,10 +2,12 @@
 
 global:
   resolve_timeout: 5m
+  # Note: Configure these values based on your SMTP provider
+  # You can use environment variables via Docker secrets or configmaps in production
   smtp_smarthost: 'smtp.gmail.com:587'
-  smtp_from: 'alerts@horizen-network.com'
-  smtp_auth_username: 'alerts@horizen-network.com'
-  smtp_auth_password: 'CHANGE_ME'
+  smtp_from: '${ALERT_EMAIL:-alerts@horizen-network.com}'
+  smtp_auth_username: '${ALERT_EMAIL:-alerts@horizen-network.com}'
+  smtp_auth_password: '${ALERT_EMAIL_PASSWORD:-CHANGE_ME}'
   smtp_require_tls: true
 
 # Templates for notifications

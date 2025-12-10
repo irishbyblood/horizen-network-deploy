@@ -79,7 +79,7 @@ fi
 
 # Check MongoDB
 echo -e "\n${YELLOW}Checking MongoDB...${NC}"
-if docker exec horizen-mongodb mongosh --quiet --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
+if docker exec horizen-mongodb mongosh --quiet --eval "db.adminCommand('ping').ok" 2>/dev/null | grep -q "1"; then
     echo -e "${GREEN}✓ MongoDB is responding${NC}"
 else
     echo -e "${RED}✗ MongoDB is not responding${NC}"

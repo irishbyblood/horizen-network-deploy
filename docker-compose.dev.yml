@@ -46,18 +46,18 @@ services:
     ports:
       - "5432:5432"  # Expose PostgreSQL for debugging
     environment:
-      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devpassword}
 
   mongodb:
     ports:
       - "27017:27017"  # Expose MongoDB for debugging
     environment:
-      - MONGO_INITDB_ROOT_PASSWORD=devpassword
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-devpassword}
 
   redis:
     ports:
       - "6379:6379"  # Expose Redis for debugging
-    command: redis-server --requirepass devpassword
+    command: redis-server --requirepass ${REDIS_PASSWORD:-devpassword}
 
   zookeeper:
     ports:

@@ -77,8 +77,7 @@ certbot certonly \
     -d "$DOMAIN" \
     -d "www.$DOMAIN" \
     -d "druid.$DOMAIN" \
-    -d "geniess.$DOMAIN" \
-    --cert-path ./ssl
+    -d "geniess.$DOMAIN"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ SSL certificates obtained successfully${NC}"
