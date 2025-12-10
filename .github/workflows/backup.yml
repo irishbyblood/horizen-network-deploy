@@ -6,8 +6,13 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   backup-production:
+    permissions:
+      contents: read
     name: Backup Production Data
     runs-on: ubuntu-latest
     environment: production
@@ -88,6 +93,8 @@ jobs:
   backup-staging:
     name: Backup Staging Data
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     environment: staging
     steps:
       - name: Checkout code
