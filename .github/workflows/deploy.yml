@@ -1,0 +1,198 @@
+name: Deploy Horizen Network
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  lint:
+    name: Lint Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose
+        run: |
+          docker-compose config
+          docker-compose -f docker-compose.yml -f docker-compose.dev.yml config
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml config
+
+      - name: Validate Nginx Config
+        run: |
+          docker run --rm -v $(pwd)/nginx:/etc/nginx:ro nginx:alpine nginx -t
+
+      - name: Lint Shell Scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/*.sh
+
+      - name: Validate Kubernetes Manifests
+        run: |
+          curl -s https://raw.githubusercontent.com/kubernetes/kubectl/master/LICENSE > /dev/null
+          for file in kubernetes/*.yaml kubernetes/**/*.yaml; do
+            echo "Validating $file"
+            docker run --rm -v $(pwd):/workdir mikefarah/yq eval $file > /dev/null
+          done
+
+  test:
+    name: Test Configuration
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          cp .env.example .env
+          sed -i 's/changeme_postgres_password/test_password/g' .env
+          sed -i 's/changeme_mongo_password/test_password/g' .env
+          sed -i 's/changeme_redis_password/test_password/g' .env
+
+      - name: Start Services
+        run: |
+          docker-compose up -d
+          sleep 30
+
+      - name: Check Services Health
+        run: |
+          docker-compose ps
+          
+          # Check Nginx
+          curl -f http://localhost/health || exit 1
+          
+          # Check PostgreSQL
+          docker-compose exec -T postgres pg_isready -U druid || exit 1
+          
+          # Check Redis
+          docker-compose exec -T redis redis-cli -a test_password ping || exit 1
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Pull Required Images
+        run: |
+          docker-compose pull
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://staging.horizen-network.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            git pull origin develop
+            cp .env.staging .env
+            ./scripts/deploy.sh dev
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://horizen-network.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            git pull origin main
+            cp .env.production .env
+            ./scripts/deploy.sh prod
+
+      - name: Run Health Check
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/health-check.sh
+
+      - name: Notify Deployment
+        if: success()
+        run: |
+          echo "Deployment to production successful!"
+          # Add notification logic here (Slack, email, etc.)
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
