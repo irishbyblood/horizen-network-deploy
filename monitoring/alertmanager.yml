@@ -1,0 +1,104 @@
+# Alertmanager Configuration for Horizen Network
+
+global:
+  resolve_timeout: 5m
+  # Note: Configure these values based on your SMTP provider
+  # You can use environment variables via Docker secrets or configmaps in production
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: '${ALERT_EMAIL:-alerts@horizen-network.com}'
+  smtp_auth_username: '${ALERT_EMAIL:-alerts@horizen-network.com}'
+  smtp_auth_password: '${ALERT_EMAIL_PASSWORD:-CHANGE_ME}'
+  smtp_require_tls: true
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for notifications
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+    
+    # Warning alerts - grouped notifications
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_interval: 5m
+      repeat_interval: 1h
+    
+    # Database alerts
+    - match:
+        category: database
+      receiver: 'database-team'
+    
+    # Druid specific alerts
+    - match:
+        service: druid
+      receiver: 'analytics-team'
+
+# Receivers (notification channels)
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'admin@horizen-network.com'
+        headers:
+          Subject: '[Horizen Network] {{ .GroupLabels.alertname }}'
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'oncall@horizen-network.com'
+        headers:
+          Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+    # Slack webhook (uncomment and configure)
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+    #     channel: '#critical-alerts'
+    #     title: '[CRITICAL] {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'admin@horizen-network.com'
+        headers:
+          Subject: '[WARNING] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  - name: 'database-team'
+    email_configs:
+      - to: 'dba@horizen-network.com'
+        headers:
+          Subject: '[Database] {{ .GroupLabels.alertname }}'
+
+  - name: 'analytics-team'
+    email_configs:
+      - to: 'analytics@horizen-network.com'
+        headers:
+          Subject: '[Analytics] {{ .GroupLabels.alertname }}'
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+  
+  # Inhibit all alerts if cluster is down
+  - source_match:
+      alertname: 'ClusterDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['cluster']

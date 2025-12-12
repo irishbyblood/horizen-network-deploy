@@ -1,0 +1,79 @@
+# Environment files with secrets
+.env
+.env.local
+.env.staging
+# Note: .env.production and .env.example are templates and should be committed
+# They contain placeholders, not actual secrets
+
+# SSL Certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+ssl/
+certs/
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker volumes
+volumes/
+data/
+
+# Backups
+backups/
+*.sql
+*.dump
+*.tar.gz
+*.zip
+
+# Node modules
+node_modules/
+npm-debug.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Druid specific
+var/
+druid/var/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+target/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Secrets and credentials
+secrets/
+credentials/

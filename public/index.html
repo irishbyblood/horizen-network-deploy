@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Horizen Network - Advanced Data Analytics and Intelligence Platform">
+    <title>Horizen Network</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>🌐 Horizen Network</h1>
+            </div>
+            <p class="tagline">Advanced Data Analytics and Intelligence Platform</p>
+        </header>
+
+        <main>
+            <section class="hero">
+                <h2>Welcome to Horizen Network</h2>
+                <p>Your comprehensive solution for data analytics, real-time processing, and intelligent insights.</p>
+            </section>
+
+            <section class="applications">
+                <h2>Our Applications</h2>
+                
+                <div class="app-grid">
+                    <div class="app-card">
+                        <div class="app-icon">📊</div>
+                        <h3>Apache Druid</h3>
+                        <p>Real-time analytics database designed for fast slice-and-dice analytics on large data sets.</p>
+                        <div class="app-links">
+                            <!-- Note: Update domain to match your deployment -->
+                            <a href="http://druid.horizen-network.com" class="btn btn-primary">Access Druid</a>
+                            <a href="/druid" class="btn btn-secondary">Alternative Path</a>
+                        </div>
+                        <div class="status">
+                            <span class="status-indicator status-active"></span>
+                            <span>Active</span>
+                        </div>
+                    </div>
+
+                    <div class="app-card">
+                        <div class="app-icon">🔮</div>
+                        <h3>Geniess</h3>
+                        <p>Advanced intelligence and analytics platform for enterprise data processing and insights.</p>
+                        <div class="app-links">
+                            <!-- Note: Update domain to match your deployment -->
+                            <a href="http://geniess.horizen-network.com" class="btn btn-primary">Access Geniess</a>
+                        </div>
+                        <div class="status">
+                            <span class="status-indicator status-config"></span>
+                            <span>Configuration Required</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="features">
+                <h2>Platform Features</h2>
+                <div class="feature-grid">
+                    <div class="feature">
+                        <h4>⚡ Real-Time Analytics</h4>
+                        <p>Process and analyze streaming data in real-time with sub-second query response times.</p>
+                    </div>
+                    <div class="feature">
+                        <h4>🔒 Enterprise Security</h4>
+                        <p>Built with security best practices including encrypted connections and authentication.</p>
+                    </div>
+                    <div class="feature">
+                        <h4>📈 Scalable Architecture</h4>
+                        <p>Horizontally scalable infrastructure designed to handle petabytes of data.</p>
+                    </div>
+                    <div class="feature">
+                        <h4>🔧 Easy Deployment</h4>
+                        <p>Docker-based deployment with comprehensive automation and monitoring.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="system-info">
+                <h2>System Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>Domain:</strong>
+                        <span id="domain">horizen-network.com</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Environment:</strong>
+                        <span class="badge">Production</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Version:</strong>
+                        <span>1.0.0</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Status:</strong>
+                        <span class="status-active">● Online</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="footer-content">
+                <p>&copy; 2024 Horizen Network. All rights reserved.</p>
+                <div class="footer-links">
+                    <a href="https://github.com/irishbyblood/horizen-network-deploy">GitHub</a>
+                    <span>•</span>
+                    <a href="/health">Health Check</a>
+                    <span>•</span>
+                    <a href="https://druid.apache.org/docs/latest/" target="_blank">Druid Docs</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Update domain dynamically
+        document.getElementById('domain').textContent = window.location.hostname;
+
+        // Check service health
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    console.log('System health: OK');
+                }
+            } catch (error) {
+                console.warn('Health check failed:', error);
+            }
+        }
+
+        checkHealth();
+    </script>
+</body>
+</html>

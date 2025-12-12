@@ -1,0 +1,123 @@
+name: Scheduled Backup
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-production:
+    permissions:
+      contents: read
+    name: Backup Production Data
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Backup Script
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/backup.sh
+
+      - name: Upload Backup to S3
+        uses: appleboy/ssh-action@master
+        if: success()
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            # Install AWS CLI if not present
+            if ! command -v aws &> /dev/null; then
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip awscliv2.zip
+              sudo ./aws/install
+            fi
+            
+            # Configure AWS credentials
+            export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            export AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }}
+            
+            # Upload latest backups to S3
+            cd /opt/horizen-network-deploy
+            LATEST_BACKUP=$(ls -t backups/*.tar.gz | head -1)
+            aws s3 cp "$LATEST_BACKUP" s3://${{ secrets.BACKUP_BUCKET }}/horizen-network/
+
+      - name: Verify Backup
+        uses: appleboy/ssh-action@master
+        if: success()
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy/backups
+            LATEST_BACKUP=$(ls -t *.tar.gz | head -1)
+            if [ -f "$LATEST_BACKUP" ]; then
+              SIZE=$(stat -f%z "$LATEST_BACKUP" 2>/dev/null || stat -c%s "$LATEST_BACKUP")
+              if [ "$SIZE" -gt 1000 ]; then
+                echo "Backup verified: $LATEST_BACKUP (Size: $SIZE bytes)"
+              else
+                echo "Backup file too small, may be corrupt"
+                exit 1
+              fi
+            else
+              echo "No backup file found"
+              exit 1
+            fi
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "Backup completed successfully"
+          # Add notification logic here (Slack, email, etc.)
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          echo "Backup failed!"
+          # Add notification logic here (Slack, email, etc.)
+
+  backup-staging:
+    name: Backup Staging Data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Backup Script
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/backup.sh
+
+      - name: Cleanup Old Backups
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy/backups
+            # Keep only last 7 days of backups in staging
+            find . -name "*.tar.gz" -mtime +7 -delete
+            find . -name "*.sql.gz" -mtime +7 -delete

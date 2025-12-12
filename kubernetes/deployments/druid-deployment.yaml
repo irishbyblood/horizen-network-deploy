@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: druid-router
+  namespace: horizen-network
+  labels:
+    app: druid
+    component: router
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: druid
+      component: router
+  template:
+    metadata:
+      labels:
+        app: druid
+        component: router
+    spec:
+      containers:
+      - name: druid-router
+        image: apache/druid:27.0.0
+        env:
+        - name: DRUID_SERVICE
+          value: router
+        - name: DRUID_HEAP_SIZE
+          value: "1g"
+        - name: DRUID_MAX_DIRECT_SIZE
+          value: "1g"
+        ports:
+        - containerPort: 8888
+          name: http
+        volumeMounts:
+        - name: druid-config
+          mountPath: /opt/druid/conf/druid
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: druid-config
+        configMap:
+          name: druid-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: druid-broker
+  namespace: horizen-network
+  labels:
+    app: druid
+    component: broker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: druid
+      component: broker
+  template:
+    metadata:
+      labels:
+        app: druid
+        component: broker
+    spec:
+      containers:
+      - name: druid-broker
+        image: apache/druid:27.0.0
+        env:
+        - name: DRUID_SERVICE
+          value: broker
+        - name: DRUID_HEAP_SIZE
+          value: "4g"
+        - name: DRUID_MAX_DIRECT_SIZE
+          value: "4g"
+        ports:
+        - containerPort: 8082
+          name: http
+        volumeMounts:
+        - name: druid-config
+          mountPath: /opt/druid/conf/druid
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+      volumes:
+      - name: druid-config
+        configMap:
+          name: druid-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: druid-coordinator
+  namespace: horizen-network
+  labels:
+    app: druid
+    component: coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: druid
+      component: coordinator
+  template:
+    metadata:
+      labels:
+        app: druid
+        component: coordinator
+    spec:
+      containers:
+      - name: druid-coordinator
+        image: apache/druid:27.0.0
+        env:
+        - name: DRUID_SERVICE
+          value: coordinator
+        - name: DRUID_HEAP_SIZE
+          value: "4g"
+        - name: DRUID_MAX_DIRECT_SIZE
+          value: "4g"
+        ports:
+        - containerPort: 8081
+          name: http
+        volumeMounts:
+        - name: druid-config
+          mountPath: /opt/druid/conf/druid
+        - name: druid-data
+          mountPath: /opt/druid/var
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+      volumes:
+      - name: druid-config
+        configMap:
+          name: druid-config
+      - name: druid-data
+        persistentVolumeClaim:
+          claimName: druid-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: druid-pvc
+  namespace: horizen-network
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi

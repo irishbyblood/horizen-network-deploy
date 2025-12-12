@@ -1,0 +1,141 @@
+version: '3.8'
+
+# Production override configuration
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  nginx:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  zookeeper:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  postgres:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    command: postgres -c max_connections=200 -c shared_buffers=2GB -c effective_cache_size=6GB
+
+  druid-coordinator:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 4G
+    environment:
+      - DRUID_HEAP_SIZE=8g
+      - DRUID_MAX_DIRECT_SIZE=8g
+
+  druid-broker:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 12G
+        reservations:
+          cpus: '2'
+          memory: 8G
+    environment:
+      - DRUID_HEAP_SIZE=8g
+      - DRUID_MAX_DIRECT_SIZE=8g
+      - DRUID_PROCESSING_NUM_THREADS=4
+
+  druid-historical:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+    environment:
+      - DRUID_HEAP_SIZE=8g
+      - DRUID_MAX_DIRECT_SIZE=8g
+      - DRUID_PROCESSING_NUM_THREADS=4
+
+  druid-middlemanager:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 12G
+        reservations:
+          cpus: '2'
+          memory: 6G
+    environment:
+      - DRUID_HEAP_SIZE=8g
+      - DRUID_MAX_DIRECT_SIZE=8g
+
+  druid-router:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - DRUID_HEAP_SIZE=1g
+      - DRUID_MAX_DIRECT_SIZE=1g
+
+  mongodb:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    command: mongod --auth --wiredTigerCacheSizeGB 2
+
+  redis:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 768mb --maxmemory-policy allkeys-lru
