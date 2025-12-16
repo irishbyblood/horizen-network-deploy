@@ -65,6 +65,9 @@ tmp/
 temp/
 *.tmp
 
+# DNS exports (generated files)
+dns/exports/
+
 # Build artifacts
 dist/
 build/
