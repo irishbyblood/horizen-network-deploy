@@ -34,10 +34,19 @@ if [ -z "$SERVER_IP" ]; then
 fi
 
 # Validate IP address format
-if ! echo "$SERVER_IP" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+if ! echo "$SERVER_IP" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
     echo -e "${RED}Error: Invalid IP address format: $SERVER_IP${NC}"
     exit 1
 fi
+
+# Validate each octet is 0-255
+IFS='.' read -ra OCTETS <<< "$SERVER_IP"
+for octet in "${OCTETS[@]}"; do
+    if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
+        echo -e "${RED}Error: Invalid IP address - octet out of range (0-255): $SERVER_IP${NC}"
+        exit 1
+    fi
+done
 
 # Configuration
 DOMAIN="${DOMAIN:-horizen-network.com}"

@@ -19,6 +19,9 @@ DNS_SERVERS=("8.8.8.8" "1.1.1.1" "8.8.4.4")
 VERBOSE=false
 QUICK=false
 
+# IPv4 regex pattern
+IPV4_REGEX='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -67,7 +70,7 @@ check_a_record() {
         echo -e "${YELLOW}Checking A record for ${domain} via ${dns_server}...${NC}"
     fi
     
-    RESULT=$(dig @${dns_server} ${domain} A +short 2>&1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+    RESULT=$(dig @${dns_server} ${domain} A +short 2>&1 | grep -E "$IPV4_REGEX" | head -n1)
     
     if [ -z "$RESULT" ]; then
         return 1
@@ -90,7 +93,7 @@ check_cname_record() {
     
     if [ -z "$RESULT" ]; then
         # Try A record fallback
-        RESULT=$(dig @${dns_server} ${subdomain}.${DOMAIN} A +short 2>&1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+        RESULT=$(dig @${dns_server} ${subdomain}.${DOMAIN} A +short 2>&1 | grep -E "$IPV4_REGEX" | head -n1)
         if [ -n "$RESULT" ]; then
             echo "$RESULT (A record)"
             return 0
@@ -243,7 +246,7 @@ else
             echo -e "    ${RED}✗${NC} ${subdomain}.${DOMAIN} - No resolution"
             ((TOTAL_CHECKS++))
             ((FAILED_CHECKS++))
-        elif echo "$SUBDOMAIN_RESULT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        elif echo "$SUBDOMAIN_RESULT" | grep -qE "$IPV4_REGEX"; then
             if [ "$SUBDOMAIN_RESULT" = "$MAIN_IP" ]; then
                 echo -e "    ${GREEN}✓${NC} ${subdomain}.${DOMAIN} → ${SUBDOMAIN_RESULT}"
             else

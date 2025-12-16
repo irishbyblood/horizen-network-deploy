@@ -59,7 +59,7 @@ if command -v curl &> /dev/null; then
         
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$TEST_URL" 2>/dev/null || echo "000")
         
-        if [ "$HTTP_CODE" != "000" ] && [ "$HTTP_CODE" != "000" ]; then
+        if [ "$HTTP_CODE" != "000" ] && [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 600 ]; then
             echo -e "${GREEN}✓${NC} (HTTP $HTTP_CODE)"
             ((PASSED++))
         else
