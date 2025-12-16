@@ -329,7 +329,7 @@ EOF
 )
         
         echo "$CURL_EMAIL" | curl -s --url "smtp://$SMTP_HOST:$SMTP_PORT" \
-            --ssl-reqd \
+            --ssl \
             --mail-from "$SMTP_FROM" \
             --mail-rcpt "$SMTP_TO" \
             --user "$SMTP_USER:$SMTP_PASSWORD" \

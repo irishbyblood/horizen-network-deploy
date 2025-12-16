@@ -337,6 +337,9 @@ groups:
           description: "Container {{ $labels.name }} on {{ $labels.instance }} was killed by out-of-memory killer"
 
   # Backup and Certificate Alerts
+  # Note: The backup_last_success_timestamp_seconds metric should be exposed by your backup system
+  # If using the provided backup.sh script, you'll need to add metric exporting
+  # Example: echo "backup_last_success_timestamp_seconds $(date +%s)" > /var/lib/node_exporter/textfile_collector/backup.prom
   - name: backup_certificates
     interval: 1h
     rules:

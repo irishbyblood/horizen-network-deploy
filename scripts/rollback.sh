@@ -96,9 +96,13 @@ backup_current_state() {
     git rev-parse HEAD > "$ROLLBACK_BACKUP_DIR/commit.txt"
     echo -e "${GREEN}✓ Saved current commit${NC}"
     
-    # Backup current environment file
+    # Backup current environment file and source it for database credentials
     if [ -f .env ]; then
         cp .env "$ROLLBACK_BACKUP_DIR/.env.backup"
+        # Source environment file for database operations
+        set -a
+        source .env
+        set +a
         echo -e "${GREEN}✓ Backed up .env file${NC}"
     fi
     

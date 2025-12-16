@@ -154,7 +154,8 @@ echo -e "\n${BLUE}=== Performance Benchmarks ===${NC}"
 if docker ps | grep -q horizen-nginx; then
     echo -e "${YELLOW}Testing: Nginx response time${NC}"
     RESPONSE_TIME=$(curl -o /dev/null -s -w '%{time_total}' http://localhost/)
-    if (( $(echo "$RESPONSE_TIME < 1.0" | bc -l) )); then
+    # Use awk for floating point comparison (more portable than bc)
+    if awk "BEGIN {exit !($RESPONSE_TIME < 1.0)}"; then
         echo -e "${GREEN}✓ PASSED: Nginx response time (${RESPONSE_TIME}s < 1.0s)${NC}"
         ((PASSED++))
     else
@@ -169,8 +170,9 @@ if docker ps | grep -q horizen-postgres; then
     START_TIME=$(date +%s.%N)
     docker exec horizen-postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT COUNT(*) FROM pg_tables;' >/dev/null 2>&1
     END_TIME=$(date +%s.%N)
-    QUERY_TIME=$(echo "$END_TIME - $START_TIME" | bc)
-    if (( $(echo "$QUERY_TIME < 0.5" | bc -l) )); then
+    QUERY_TIME=$(awk "BEGIN {print $END_TIME - $START_TIME}")
+    # Use awk for floating point comparison
+    if awk "BEGIN {exit !($QUERY_TIME < 0.5)}"; then
         echo -e "${GREEN}✓ PASSED: PostgreSQL query performance (${QUERY_TIME}s < 0.5s)${NC}"
         ((PASSED++))
     else
