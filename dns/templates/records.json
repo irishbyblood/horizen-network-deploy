@@ -1,0 +1,101 @@
+{
+  "domain": "horizen-network.com",
+  "description": "DNS records configuration for Horizen Network infrastructure",
+  "server_ip": "YOUR_SERVER_IP",
+  "ttl_default": 3600,
+  "records": [
+    {
+      "type": "A",
+      "name": "@",
+      "value": "YOUR_SERVER_IP",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Main domain - points to server IP",
+      "required": true
+    },
+    {
+      "type": "CNAME",
+      "name": "www",
+      "value": "horizen-network.com",
+      "ttl": 3600,
+      "priority": null,
+      "description": "WWW subdomain - redirects to main domain",
+      "required": true
+    },
+    {
+      "type": "CNAME",
+      "name": "druid",
+      "value": "horizen-network.com",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Apache Druid analytics interface",
+      "required": true
+    },
+    {
+      "type": "CNAME",
+      "name": "geniess",
+      "value": "horizen-network.com",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Geniess AI intelligence platform",
+      "required": true
+    },
+    {
+      "type": "CNAME",
+      "name": "entity",
+      "value": "horizen-network.com",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Entity unified AI web application",
+      "required": true
+    },
+    {
+      "type": "CNAME",
+      "name": "api",
+      "value": "horizen-network.com",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Unified API endpoint",
+      "required": true
+    },
+    {
+      "type": "CAA",
+      "name": "@",
+      "value": "0 issue \"letsencrypt.org\"",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Authorize Let's Encrypt to issue SSL certificates",
+      "required": false
+    },
+    {
+      "type": "CAA",
+      "name": "@",
+      "value": "0 issuewild \"letsencrypt.org\"",
+      "ttl": 3600,
+      "priority": null,
+      "description": "Authorize Let's Encrypt to issue wildcard SSL certificates",
+      "required": false
+    },
+    {
+      "type": "TXT",
+      "name": "@",
+      "value": "v=spf1 -all",
+      "ttl": 3600,
+      "priority": null,
+      "description": "SPF record to prevent email spoofing (if not using email)",
+      "required": false
+    }
+  ],
+  "metadata": {
+    "created_at": "2024-12-16",
+    "version": "1.0.0",
+    "author": "Horizen Network",
+    "notes": [
+      "Replace YOUR_SERVER_IP with your actual server IP address",
+      "TTL of 3600 seconds (1 hour) is recommended for production",
+      "Use lower TTL (300 seconds) during initial setup for faster propagation",
+      "CAA records are optional but recommended for security",
+      "TXT SPF record is optional and only needed if you're not sending email"
+    ]
+  }
+}

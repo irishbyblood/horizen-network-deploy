@@ -76,7 +76,18 @@ Horizen Network is a comprehensive deployment infrastructure for hosting advance
    nano .env  # Edit with your configuration
    ```
 
-3. **Deploy the infrastructure**:
+3. **Configure DNS** (required for production):
+   ```bash
+   # Point your domain to your server IP
+   # Add required DNS records (see dns/README.md)
+   
+   # Verify DNS configuration
+   ./dns/scripts/verify-dns.sh
+   ```
+   
+   See [DNS Configuration Guide](dns/README.md) for detailed instructions.
+
+4. **Deploy the infrastructure**:
    ```bash
    # For development
    ./scripts/deploy.sh dev
@@ -85,23 +96,75 @@ Horizen Network is a comprehensive deployment infrastructure for hosting advance
    ./scripts/deploy.sh prod
    ```
 
-4. **Verify deployment**:
+5. **Verify deployment**:
    ```bash
    ./scripts/health-check.sh
    ```
 
-5. **Setup SSL certificates** (production only):
+6. **Setup SSL certificates** (production only):
    ```bash
    sudo ./scripts/ssl-setup.sh
    ```
+
+## 🌐 DNS Setup
+
+Before deploying to production, configure DNS for your domain:
+
+### Required DNS Records
+
+| Type | Name | Value | Purpose |
+|------|------|-------|---------|
+| A | @ | YOUR_SERVER_IP | Main domain |
+| CNAME | www | horizen-network.com | WWW redirect |
+| CNAME | druid | horizen-network.com | Apache Druid UI |
+| CNAME | geniess | horizen-network.com | Geniess AI platform |
+| CNAME | entity | horizen-network.com | Entity unified AI app |
+| CNAME | api | horizen-network.com | API endpoint |
+
+### Quick Setup
+
+```bash
+# 1. Get your server IP
+curl -4 ifconfig.me
+
+# 2. Configure DNS records at your DNS provider
+# (See dns/README.md for provider-specific guides)
+
+# 3. Verify DNS configuration
+./dns/scripts/verify-dns.sh
+
+# 4. Wait for DNS propagation
+# Check: https://www.whatsmydns.net/
+```
+
+### Automated Setup (Cloudflare)
+
+```bash
+export CLOUDFLARE_API_TOKEN="your_token"
+export CLOUDFLARE_ZONE_ID="your_zone_id"
+export SERVER_IP="your_server_ip"
+
+./dns/scripts/setup-cloudflare.sh
+```
+
+**📖 Complete DNS Guide**: See [dns/README.md](dns/README.md) for comprehensive instructions, troubleshooting, and provider-specific guides.
 
 ## 📚 Documentation
 
 Detailed documentation is available in the `docs/` directory:
 
 - [**Deployment Guide**](docs/DEPLOYMENT_GUIDE.md) - Complete deployment instructions
-- [**DNS Configuration**](docs/DNS_CONFIGURATION.md) - DNS setup and configuration
+- [**DNS Configuration**](docs/DNS_CONFIGURATION.md) - Basic DNS setup and configuration
 - [**Application Setup**](docs/APPLICATION_SETUP.md) - Application-specific configurations
+
+**New comprehensive DNS documentation** in `dns/` directory:
+
+- [**DNS Setup Guide**](dns/README.md) - Complete DNS configuration guide
+- [**DNS Records**](dns/RECORDS.md) - Detailed record specifications
+- [**Provider Guides**](dns/providers/) - Cloudflare, GoDaddy, Namecheap, Route 53, DigitalOcean
+- [**Verification Checklist**](dns/VERIFICATION_CHECKLIST.md) - Step-by-step verification
+- [**Troubleshooting**](dns/TROUBLESHOOTING.md) - Common issues and solutions
+- [**Migration Guide**](dns/MIGRATION.md) - Moving between DNS providers
 
 ## 🔧 Configuration
 

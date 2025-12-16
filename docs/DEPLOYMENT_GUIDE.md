@@ -43,6 +43,23 @@ This comprehensive guide covers the complete deployment process for the Horizen 
 - Ports 80 (HTTP) and 443 (HTTPS) accessible from internet
 - Firewall configured to allow necessary traffic
 
+### DNS Requirements (Production Only)
+
+**Before deploying to production, DNS must be configured:**
+
+- Domain ownership: horizen-network.com (or your domain)
+- DNS provider access (Cloudflare, AWS Route 53, GoDaddy, etc.)
+- A record pointing domain to server IP
+- CNAME records for all subdomains (www, druid, geniess, entity, api)
+- DNS propagated globally (verify with https://www.whatsmydns.net/)
+
+**📖 See [../dns/README.md](../dns/README.md) for complete DNS setup guide**
+
+Quick DNS verification:
+```bash
+./dns/scripts/verify-dns.sh
+```
+
 ## Server Setup
 
 ### 1. Update System
