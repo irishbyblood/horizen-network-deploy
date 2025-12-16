@@ -435,7 +435,7 @@ groups:
           description: "SSL certificate for {{ $labels.domain }} expires in {{ $value }} days"
           action: "Renew SSL certificate before expiration"
 
-      - alert: SSLCertificateExpiringSoon
+      - alert: SSLCertificateExpiringCritical
         expr: (ssl_cert_not_after - time()) / 86400 < 7
         labels:
           severity: critical

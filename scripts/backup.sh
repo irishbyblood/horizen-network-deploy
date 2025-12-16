@@ -244,7 +244,22 @@ if [ "$ENABLE_ENCRYPTION" = true ]; then
     echo -e "\n${YELLOW}Encrypting backups...${NC}"
     
     if command -v gpg &> /dev/null; then
-        for backup_file in "$BACKUP_DIR"/*_${DATE}*.{gz,tar.gz} 2>/dev/null; do
+        # Process .gz files
+        for backup_file in "$BACKUP_DIR"/*_${DATE}*.gz 2>/dev/null; do
+            if [ -f "$backup_file" ]; then
+                echo "Encrypting $(basename $backup_file)..."
+                if gpg --symmetric --cipher-algo AES256 --batch --yes --passphrase="${BACKUP_ENCRYPTION_KEY:-changeme}" "$backup_file"; then
+                    rm "$backup_file"
+                    echo -e "${GREEN}✓ Encrypted: ${backup_file}.gpg${NC}"
+                else
+                    echo -e "${RED}✗ Encryption failed for $backup_file${NC}"
+                    ((BACKUP_WARNINGS++))
+                fi
+            fi
+        done
+        
+        # Process .tar.gz files
+        for backup_file in "$BACKUP_DIR"/*_${DATE}*.tar.gz 2>/dev/null; do
             if [ -f "$backup_file" ]; then
                 echo "Encrypting $(basename $backup_file)..."
                 if gpg --symmetric --cipher-algo AES256 --batch --yes --passphrase="${BACKUP_ENCRYPTION_KEY:-changeme}" "$backup_file"; then
@@ -270,27 +285,30 @@ if [ "$ENABLE_S3_UPLOAD" = true ]; then
         S3_BUCKET="${AWS_BACKUP_BUCKET:-horizen-backups}"
         S3_PREFIX="${AWS_BACKUP_PREFIX:-horizen-network}"
         
-        for backup_file in "$BACKUP_DIR"/*_${DATE}*.{gz,tar.gz,gpg} 2>/dev/null; do
-            if [ -f "$backup_file" ]; then
-                filename=$(basename "$backup_file")
-                echo "Uploading $filename to S3..."
+        # Process all backup files separately to avoid glob issues
+        for pattern in "gz" "tar.gz" "gpg"; do
+          for backup_file in "$BACKUP_DIR"/*_${DATE}*."$pattern" 2>/dev/null; do
+            [ -f "$backup_file" ] || continue
+            
+            filename=$(basename "$backup_file")
+            echo "Uploading $filename to S3..."
+            
+            if retry_backup 3 10 "S3 upload" \
+                aws s3 cp "$backup_file" "s3://${S3_BUCKET}/${S3_PREFIX}/${filename}"; then
+                echo -e "${GREEN}✓ Uploaded: $filename${NC}"
                 
-                if retry_backup 3 10 "S3 upload" \
-                    aws s3 cp "$backup_file" "s3://${S3_BUCKET}/${S3_PREFIX}/${filename}"; then
-                    echo -e "${GREEN}✓ Uploaded: $filename${NC}"
-                    
-                    # Verify S3 upload
-                    if aws s3 ls "s3://${S3_BUCKET}/${S3_PREFIX}/${filename}" > /dev/null 2>&1; then
-                        echo -e "${GREEN}✓ S3 upload verified${NC}"
-                    else
-                        echo -e "${RED}✗ S3 upload verification failed${NC}"
-                        ((BACKUP_WARNINGS++))
-                    fi
+                # Verify S3 upload
+                if aws s3 ls "s3://${S3_BUCKET}/${S3_PREFIX}/${filename}" > /dev/null 2>&1; then
+                    echo -e "${GREEN}✓ S3 upload verified${NC}"
                 else
-                    echo -e "${RED}✗ S3 upload failed for $filename${NC}"
+                    echo -e "${RED}✗ S3 upload verification failed${NC}"
                     ((BACKUP_WARNINGS++))
                 fi
+            else
+                echo -e "${RED}✗ S3 upload failed for $filename${NC}"
+                ((BACKUP_WARNINGS++))
             fi
+          done
         done
     else
         echo -e "${YELLOW}⚠ AWS CLI not found, skipping S3 upload${NC}"

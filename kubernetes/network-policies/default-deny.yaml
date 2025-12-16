@@ -229,21 +229,31 @@ spec:
       port: 53
 
 ---
-# Allow egress to internet for updates (optional, can be removed for stricter security)
+# Allow egress to specific endpoints for updates
+# Note: For production, replace with specific IP addresses or domains
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-internet-egress
+  name: allow-package-repository-egress
   namespace: horizen-network
 spec:
   podSelector:
     matchLabels:
-      internet-access: "true"
+      needs-updates: "true"
   policyTypes:
   - Egress
   egress:
+  # Allow access to package repositories
+  # TODO: Replace with specific CIDR blocks or use DNS-based policies
+  # Example for APT repositories: 91.189.88.0/23 (Ubuntu mirrors)
+  # Example for Docker Hub: Use external DNS solution
   - to:
-    - namespaceSelector: {}
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          - 10.0.0.0/8
+          - 172.16.0.0/12
+          - 192.168.0.0/16
     ports:
     - protocol: TCP
       port: 443
