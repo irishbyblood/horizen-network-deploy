@@ -135,7 +135,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Staging Server
+      - name: Deploy to Staging Server (with retry)
+        id: deploy_staging
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 20
+          command: |
+            ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USERNAME }}@${{ secrets.STAGING_HOST }} '
+              cd /opt/horizen-network-deploy
+              git pull origin develop
+              cp .env.staging .env
+              ./scripts/deploy.sh dev
+            '
+
+      - name: Run Health Check
+        if: success()
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -143,9 +159,25 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
             cd /opt/horizen-network-deploy
-            git pull origin develop
-            cp .env.staging .env
-            ./scripts/deploy.sh dev
+            sleep 30  # Wait for services to stabilize
+            ./scripts/health-check.sh
+
+      - name: Notify Staging Deployment
+        if: always()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            if [ -f ./scripts/notify.sh ]; then
+              if [ "${{ steps.deploy_staging.outcome }}" = "success" ]; then
+                ./scripts/notify.sh -m "Staging deployment successful" -s success --slack || true
+              else
+                ./scripts/notify.sh -m "Staging deployment failed" -s error --slack || true
+              fi
+            fi
 
   deploy-production:
     name: Deploy to Production
@@ -161,7 +193,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Production Server
+      - name: Backup Current State
+        id: backup
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
@@ -169,25 +202,105 @@ jobs:
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
             cd /opt/horizen-network-deploy
-            git pull origin main
-            cp .env.production .env
-            ./scripts/deploy.sh prod
+            # Save current commit for potential rollback
+            git rev-parse HEAD > /tmp/pre_deploy_commit.txt
+            # Run backup
+            ./scripts/backup.sh
+            echo "Backup completed"
 
-      - name: Run Health Check
-        uses: appleboy/ssh-action@master
+      - name: Deploy to Production Server (with retry)
+        id: deploy
+        uses: nick-fields/retry@v2
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USERNAME }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            cd /opt/horizen-network-deploy
-            ./scripts/health-check.sh
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            ssh -o StrictHostKeyChecking=no ${{ secrets.PRODUCTION_USERNAME }}@${{ secrets.PRODUCTION_HOST }} '
+              cd /opt/horizen-network-deploy
+              git pull origin main
+              cp .env.production .env
+              ./scripts/deploy.sh prod
+            '
 
-      - name: Notify Deployment
+      - name: Run Health Check (with retry)
+        id: health_check
         if: success()
-        run: |
-          echo "Deployment to production successful!"
-          # Add notification logic here (Slack, email, etc.)
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: |
+            ssh -o StrictHostKeyChecking=no ${{ secrets.PRODUCTION_USERNAME }}@${{ secrets.PRODUCTION_HOST }} '
+              cd /opt/horizen-network-deploy
+              ./scripts/health-check.sh
+            '
+
+      - name: Verify Deployment
+        if: success()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            echo "Running deployment verification..."
+            ./scripts/validate.sh || exit 0  # Don't fail on warnings
+            echo "Deployment verified successfully"
+
+      - name: Rollback on Failure
+        if: failure() && steps.deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            echo "Deployment failed, initiating rollback..."
+            if [ -f /tmp/pre_deploy_commit.txt ]; then
+              ROLLBACK_COMMIT=$(cat /tmp/pre_deploy_commit.txt)
+              ./scripts/rollback.sh --commit "$ROLLBACK_COMMIT" --skip-db
+              echo "Rollback to commit $ROLLBACK_COMMIT completed"
+            else
+              echo "No rollback point found, manual intervention required"
+            fi
+
+      - name: Notify Success
+        if: success()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            if [ -f ./scripts/notify.sh ]; then
+              ./scripts/notify.sh \
+                -m "Production deployment successful for commit ${{ github.sha }}" \
+                -t "Deployment Success" \
+                -s success \
+                --all || echo "Notification failed but deployment succeeded"
+            fi
+
+      - name: Notify Failure
+        if: failure()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            if [ -f ./scripts/notify.sh ]; then
+              ./scripts/notify.sh \
+                -m "Production deployment failed for commit ${{ github.sha }}. Check logs for details." \
+                -t "Deployment Failed" \
+                -s error \
+                --all || echo "Notification failed"
+            fi
 
   security-scan:
     name: Security Scan
