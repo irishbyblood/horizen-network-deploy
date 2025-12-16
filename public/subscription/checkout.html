@@ -323,8 +323,10 @@
         });
         
         // Initialize Stripe
-        // NOTE: Replace with your actual publishable key
-        const stripe = Stripe('pk_test_YOUR_PUBLISHABLE_KEY');
+        // NOTE: This should be replaced with your actual publishable key
+        // In production, load from environment: window.STRIPE_PUBLIC_KEY
+        const stripeKey = window.STRIPE_PUBLIC_KEY || 'pk_test_51234567890'; // Placeholder for demo
+        const stripe = Stripe(stripeKey);
         const elements = stripe.elements();
         
         // Create card element

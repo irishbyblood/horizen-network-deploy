@@ -7,6 +7,8 @@ Handles Stripe webhook events for subscription updates
 import os
 import logging
 import stripe
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import Flask, request, jsonify
 from datetime import datetime
 from typing import Dict, Any
@@ -109,9 +111,6 @@ def handle_invoice_paid(event: Dict[str, Any]) -> None:
         # Record successful payment
         try:
             # Get our subscription ID from Stripe subscription ID
-            import psycopg2
-            from psycopg2.extras import RealDictCursor
-            
             with subscription_manager._get_db_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
@@ -145,9 +144,6 @@ def handle_invoice_payment_failed(event: Dict[str, Any]) -> None:
         
         # Record failed payment
         try:
-            import psycopg2
-            from psycopg2.extras import RealDictCursor
-            
             with subscription_manager._get_db_connection() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""

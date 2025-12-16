@@ -126,8 +126,15 @@ check_env_var "ADMIN_EMAIL"
 
 # Check payment-related environment variables
 echo -e "\n${YELLOW}Checking payment environment variables...${NC}"
-check_env_var "STRIPE_SECRET_KEY" false
-check_env_var "STRIPE_WEBHOOK_SECRET" false
+# Note: These are required for production payment service
+# Set to false during initial deployment, change to true once configured
+REQUIRE_PAYMENT_VARS="${REQUIRE_PAYMENT_VARS:-false}"
+check_env_var "STRIPE_SECRET_KEY" "$REQUIRE_PAYMENT_VARS"
+check_env_var "STRIPE_WEBHOOK_SECRET" "$REQUIRE_PAYMENT_VARS"
+
+if [ "$REQUIRE_PAYMENT_VARS" = "false" ]; then
+    echo -e "${YELLOW}Note: Payment variables are optional. Set REQUIRE_PAYMENT_VARS=true for production.${NC}"
+fi
 
 # Check disk space
 echo -e "\n${YELLOW}Checking system resources...${NC}"
