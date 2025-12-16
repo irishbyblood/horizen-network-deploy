@@ -1,0 +1,640 @@
+# Horizen Network Monitoring Alerts Configuration
+# This file defines comprehensive alert rules for service availability,
+# resource utilization, performance, security, and backup monitoring
+
+groups:
+  # ========================
+  # Service Availability Alerts
+  # ========================
+  - name: service_availability
+    interval: 30s
+    rules:
+      # Nginx Alerts
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+          service: nginx
+        annotations:
+          summary: "Nginx service is down"
+          description: "Nginx has been down for more than 1 minute on {{ $labels.instance }}"
+          impact: "Web traffic is not being served"
+          action: "Check nginx container: docker-compose logs nginx"
+
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: availability
+          service: nginx
+        annotations:
+          summary: "Nginx high error rate"
+          description: "Nginx is returning high number of 5xx errors ({{ $value }} per second)"
+          action: "Check nginx logs and backend services"
+
+      # Druid Coordinator Alerts
+      - alert: DruidCoordinatorDown
+        expr: up{job="druid-coordinator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+          service: druid
+        annotations:
+          summary: "Druid Coordinator is down"
+          description: "Druid Coordinator has been down for more than 2 minutes"
+          impact: "Segment management and data availability affected"
+          action: "Check coordinator: docker-compose logs druid-coordinator"
+
+      # Druid Broker Alerts
+      - alert: DruidBrokerDown
+        expr: up{job="druid-broker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+          service: druid
+        annotations:
+          summary: "Druid Broker is down"
+          description: "Druid Broker has been down for more than 2 minutes"
+          impact: "Query processing unavailable"
+          action: "Check broker: docker-compose logs druid-broker"
+
+      # Druid Router Alerts
+      - alert: DruidRouterDown
+        expr: up{job="druid-router"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+          service: druid
+        annotations:
+          summary: "Druid Router is down"
+          description: "Druid Router has been down for more than 2 minutes"
+          impact: "Druid web console and API unavailable"
+          action: "Check router: docker-compose logs druid-router"
+
+      # Druid Historical Alerts
+      - alert: DruidHistoricalDown
+        expr: up{job="druid-historical"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          category: availability
+          service: druid
+        annotations:
+          summary: "Druid Historical node is down"
+          description: "Druid Historical has been down for more than 3 minutes"
+          impact: "Historical data queries may fail"
+          action: "Check historical: docker-compose logs druid-historical"
+
+      # Druid MiddleManager Alerts
+      - alert: DruidMiddleManagerDown
+        expr: up{job="druid-middlemanager"} == 0
+        for: 3m
+        labels:
+          severity: warning
+          category: availability
+          service: druid
+        annotations:
+          summary: "Druid MiddleManager is down"
+          description: "Druid MiddleManager has been down for more than 3 minutes"
+          impact: "Real-time ingestion affected"
+          action: "Check middlemanager: docker-compose logs druid-middlemanager"
+
+      # PostgreSQL Alerts
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+          service: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
+          impact: "Druid metadata storage unavailable, cluster unstable"
+          action: "Check postgres: docker-compose logs postgres"
+
+      # MongoDB Alerts
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+          service: database
+        annotations:
+          summary: "MongoDB is down"
+          description: "MongoDB has been down for more than 1 minute"
+          impact: "Application data unavailable"
+          action: "Check mongodb: docker-compose logs mongodb"
+
+      # Redis Alerts
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          category: availability
+          service: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+          impact: "Caching unavailable, performance degraded"
+          action: "Check redis: docker-compose logs redis"
+
+      # ZooKeeper Alerts
+      - alert: ZooKeeperDown
+        expr: up{job="zookeeper"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+          service: coordination
+        annotations:
+          summary: "ZooKeeper is down"
+          description: "ZooKeeper has been down for more than 1 minute"
+          impact: "Druid cluster coordination unavailable"
+          action: "Check zookeeper: docker-compose logs zookeeper"
+
+  # ========================
+  # Resource Utilization Alerts
+  # ========================
+  - name: resource_utilization
+    interval: 1m
+    rules:
+      # CPU Alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+          resource: cpu
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% (current: {{ $value }}%) on {{ $labels.instance }}"
+          action: "Investigate high CPU processes: docker stats"
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: resources
+          resource: cpu
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage is above 95% (current: {{ $value }}%) on {{ $labels.instance }}"
+          impact: "System performance severely degraded"
+          action: "Immediate investigation required: top, docker stats"
+
+      # Memory Alerts
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+          resource: memory
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 80% (current: {{ $value }}%) on {{ $labels.instance }}"
+          action: "Check memory usage: free -h, docker stats"
+
+      - alert: CriticalMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          category: resources
+          resource: memory
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is above 90% (current: {{ $value }}%) on {{ $labels.instance }}"
+          impact: "Risk of OOM killer, service crashes"
+          action: "Immediate action required: reduce memory usage or add resources"
+
+      # Disk Space Alerts
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+          resource: disk
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space below 20% on {{ $labels.device }} ({{ $labels.mountpoint }})"
+          action: "Clean up old files, logs, or backups: df -h"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+          category: resources
+          resource: disk
+        annotations:
+          summary: "Critical disk space"
+          description: "Disk space below 10% on {{ $labels.device }} ({{ $labels.mountpoint }})"
+          impact: "Risk of data loss, service failures"
+          action: "Immediate cleanup required or expand storage"
+
+      # Disk I/O Alerts
+      - alert: HighDiskIO
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+          resource: disk
+        annotations:
+          summary: "High disk I/O utilization"
+          description: "Disk I/O utilization is high on {{ $labels.device }}"
+          action: "Check I/O intensive processes: iotop"
+
+      # Container Resource Alerts
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+          resource: container_memory
+        annotations:
+          summary: "Container using high memory"
+          description: "Container {{ $labels.name }} is using {{ $value }}% of memory limit"
+          action: "Consider increasing memory limits or optimizing container"
+
+      - alert: ContainerOOMKilled
+        expr: increase(container_oom_events_total[5m]) > 0
+        labels:
+          severity: critical
+          category: resources
+          resource: memory
+        annotations:
+          summary: "Container OOM killed"
+          description: "Container {{ $labels.name }} was killed due to out-of-memory"
+          impact: "Service disruption"
+          action: "Increase memory limits for container"
+
+  # ========================
+  # Performance Alerts
+  # ========================
+  - name: performance
+    interval: 1m
+    rules:
+      # Query Latency Alerts
+      - alert: DruidHighQueryLatency
+        expr: histogram_quantile(0.95, rate(druid_query_time_bucket[5m])) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: druid
+        annotations:
+          summary: "Druid high query latency"
+          description: "95th percentile query latency is {{ $value }}ms (threshold: 10000ms)"
+          action: "Check query performance, consider optimizing datasources"
+
+      - alert: DruidVeryHighQueryLatency
+        expr: histogram_quantile(0.95, rate(druid_query_time_bucket[5m])) > 30000
+        for: 2m
+        labels:
+          severity: critical
+          category: performance
+          service: druid
+        annotations:
+          summary: "Druid very high query latency"
+          description: "95th percentile query latency is {{ $value }}ms (threshold: 30000ms)"
+          impact: "User experience severely degraded"
+          action: "Immediate investigation required"
+
+      # Response Time Alerts
+      - alert: NginxSlowResponseTime
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: nginx
+        annotations:
+          summary: "Nginx slow response time"
+          description: "95th percentile response time is {{ $value }}s (threshold: 2s)"
+          action: "Check backend services performance"
+
+      # Connection Alerts
+      - alert: PostgresHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: database
+        annotations:
+          summary: "PostgreSQL high connection count"
+          description: "PostgreSQL is using {{ $value }}% of available connections"
+          action: "Check for connection leaks, consider increasing max_connections"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis is using {{ $value }}% of available memory"
+          action: "Check cache eviction policy or increase memory"
+
+      # Throughput Alerts
+      - alert: DruidLowThroughput
+        expr: rate(druid_query_count[5m]) < 1
+        for: 10m
+        labels:
+          severity: info
+          category: performance
+          service: druid
+        annotations:
+          summary: "Druid low query throughput"
+          description: "Druid query rate is very low: {{ $value }} queries/sec"
+          action: "Verify if this is expected behavior"
+
+  # ========================
+  # Security Alerts
+  # ========================
+  - name: security
+    interval: 1m
+    rules:
+      # Failed Login Alerts
+      - alert: HighFailedLoginAttempts
+        expr: rate(failed_login_attempts_total[5m]) > 5
+        for: 3m
+        labels:
+          severity: warning
+          category: security
+          type: authentication
+        annotations:
+          summary: "High number of failed login attempts"
+          description: "{{ $value }} failed login attempts per second from {{ $labels.source_ip }}"
+          action: "Investigate potential brute force attack, consider blocking IP"
+
+      - alert: CriticalFailedLoginAttempts
+        expr: rate(failed_login_attempts_total[5m]) > 20
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          type: authentication
+        annotations:
+          summary: "Critical number of failed login attempts"
+          description: "{{ $value }} failed login attempts per second - potential attack"
+          impact: "System under potential brute force attack"
+          action: "Immediate action: block source IP, enable rate limiting"
+
+      # Suspicious Activity Alerts
+      - alert: UnauthorizedAccessAttempt
+        expr: increase(unauthorized_access_attempts_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          type: authorization
+        annotations:
+          summary: "Unauthorized access attempts detected"
+          description: "{{ $value }} unauthorized access attempts in last 5 minutes"
+          action: "Review access logs, verify user permissions"
+
+      - alert: SuspiciousQueryPatterns
+        expr: rate(suspicious_queries_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+          type: data_access
+        annotations:
+          summary: "Suspicious query patterns detected"
+          description: "Potential SQL injection or malicious queries detected"
+          action: "Review query logs, implement query validation"
+
+      # SSL Certificate Alerts
+      - alert: SSLCertificateExpiringSoon
+        expr: (ssl_cert_not_after - time()) / 86400 < 30
+        labels:
+          severity: warning
+          category: security
+          type: certificates
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.domain }} expires in {{ $value }} days"
+          action: "Renew SSL certificate before expiration"
+
+      - alert: SSLCertificateExpiringSoon
+        expr: (ssl_cert_not_after - time()) / 86400 < 7
+        labels:
+          severity: critical
+          category: security
+          type: certificates
+        annotations:
+          summary: "SSL certificate expiring very soon"
+          description: "SSL certificate for {{ $labels.domain }} expires in {{ $value }} days"
+          impact: "Service will be inaccessible via HTTPS after expiration"
+          action: "Immediate renewal required"
+
+      # Container Security Alerts
+      - alert: ContainerRunningAsRoot
+        expr: container_processes_running_as_root > 0
+        labels:
+          severity: warning
+          category: security
+          type: container
+        annotations:
+          summary: "Container running as root"
+          description: "Container {{ $labels.name }} is running processes as root user"
+          action: "Review container security, consider running as non-root user"
+
+  # ========================
+  # Backup Alerts
+  # ========================
+  - name: backup
+    interval: 5m
+    rules:
+      # Backup Failure Alerts
+      - alert: BackupFailed
+        expr: time() - last_backup_success_timestamp > 86400
+        for: 1h
+        labels:
+          severity: critical
+          category: backup
+          type: failure
+        annotations:
+          summary: "Backup has not succeeded in 24 hours"
+          description: "Last successful backup was {{ $value | humanizeDuration }} ago"
+          impact: "Risk of data loss"
+          action: "Check backup logs, investigate backup script failures"
+
+      - alert: BackupMissing
+        expr: time() - last_backup_success_timestamp > 172800
+        for: 1h
+        labels:
+          severity: critical
+          category: backup
+          type: failure
+        annotations:
+          summary: "No backup in 48 hours"
+          description: "Last successful backup was {{ $value | humanizeDuration }} ago"
+          impact: "High risk of data loss"
+          action: "Urgent: run manual backup, fix automated backup process"
+
+      # Backup Size Alerts
+      - alert: BackupSizeUnusual
+        expr: abs(backup_size_bytes - avg_over_time(backup_size_bytes[7d])) / avg_over_time(backup_size_bytes[7d]) > 0.5
+        for: 30m
+        labels:
+          severity: warning
+          category: backup
+          type: anomaly
+        annotations:
+          summary: "Unusual backup size detected"
+          description: "Backup size differs by {{ $value }}% from 7-day average"
+          action: "Verify backup integrity, check for data corruption"
+
+      # Backup Storage Alerts
+      - alert: BackupStorageLow
+        expr: backup_storage_available_bytes / backup_storage_total_bytes * 100 < 20
+        for: 10m
+        labels:
+          severity: warning
+          category: backup
+          type: storage
+        annotations:
+          summary: "Backup storage space low"
+          description: "Backup storage has {{ $value }}% free space remaining"
+          action: "Clean up old backups or increase storage capacity"
+
+      - alert: BackupStorageCritical
+        expr: backup_storage_available_bytes / backup_storage_total_bytes * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          category: backup
+          type: storage
+        annotations:
+          summary: "Backup storage space critical"
+          description: "Backup storage has {{ $value }}% free space remaining"
+          impact: "Backups will fail soon"
+          action: "Immediate action: clean up or expand storage"
+
+  # ========================
+  # Data Integrity Alerts
+  # ========================
+  - name: data_integrity
+    interval: 5m
+    rules:
+      # Druid Segment Alerts
+      - alert: DruidSegmentUnavailable
+        expr: druid_segment_unavailable_count > 0
+        for: 10m
+        labels:
+          severity: warning
+          category: data
+          service: druid
+        annotations:
+          summary: "Druid segments unavailable"
+          description: "{{ $value }} segments are unavailable in datasource {{ $labels.datasource }}"
+          action: "Check historical nodes, verify deep storage"
+
+      - alert: DruidSegmentLoadingFailure
+        expr: rate(druid_segment_load_failures[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          category: data
+          service: druid
+        annotations:
+          summary: "Druid segment loading failures"
+          description: "Segments failing to load at {{ $value }} failures/sec"
+          action: "Check historical node logs, verify segment files"
+
+      # Database Replication Alerts
+      - alert: PostgresReplicationLag
+        expr: pg_replication_lag_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          category: data
+          service: database
+        annotations:
+          summary: "PostgreSQL replication lag"
+          description: "Replication lag is {{ $value }} seconds"
+          action: "Check replication status, network connectivity"
+
+      # Data Freshness Alerts
+      - alert: DataFreshnessIssue
+        expr: time() - druid_datasource_max_ingestion_timestamp > 7200
+        for: 30m
+        labels:
+          severity: warning
+          category: data
+          service: druid
+        annotations:
+          summary: "Data freshness issue"
+          description: "No new data ingested in {{ $labels.datasource }} for {{ $value | humanizeDuration }}"
+          action: "Check ingestion tasks, verify data sources"
+
+  # ========================
+  # Operational Info Alerts
+  # ========================
+  - name: operational_info
+    interval: 5m
+    rules:
+      # Successful Operations
+      - alert: BackupSuccessful
+        expr: increase(backup_success_total[1h]) > 0
+        labels:
+          severity: info
+          category: operations
+          type: backup
+        annotations:
+          summary: "Backup completed successfully"
+          description: "Backup completed at {{ $labels.timestamp }}"
+
+      - alert: DeploymentSuccessful
+        expr: increase(deployment_success_total[1h]) > 0
+        labels:
+          severity: info
+          category: operations
+          type: deployment
+        annotations:
+          summary: "Deployment completed successfully"
+          description: "Deployment to {{ $labels.environment }} completed"
+
+      # Maintenance Events
+      - alert: MaintenanceScheduled
+        expr: maintenance_window_active == 1
+        labels:
+          severity: info
+          category: operations
+          type: maintenance
+        annotations:
+          summary: "Maintenance window active"
+          description: "Scheduled maintenance in progress"
+          action: "Monitor for issues, some alerts may be suppressed"
+
+      # System Restart Events
+      - alert: ServiceRestarted
+        expr: increase(container_restart_count[10m]) > 0
+        labels:
+          severity: info
+          category: operations
+          type: restart
+        annotations:
+          summary: "Service restarted"
+          description: "Container {{ $labels.name }} has been restarted"
+          action: "Verify service is healthy after restart"
