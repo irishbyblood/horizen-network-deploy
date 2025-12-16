@@ -1,0 +1,449 @@
+# Prometheus Alert Rules for Horizen Network
+# This file defines comprehensive alerting rules for monitoring the infrastructure
+
+groups:
+  # Service Availability Alerts
+  - name: service_availability
+    interval: 30s
+    rules:
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: nginx
+        annotations:
+          summary: "Nginx service is down"
+          description: "Nginx has been down for more than 1 minute on {{ $labels.instance }}"
+          
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL service is down"
+          description: "PostgreSQL has been down for more than 2 minutes on {{ $labels.instance }}"
+          
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "MongoDB service is down"
+          description: "MongoDB has been down for more than 2 minutes on {{ $labels.instance }}"
+          
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Redis service is down"
+          description: "Redis has been down for more than 1 minute on {{ $labels.instance }}"
+          
+      - alert: ZooKeeperDown
+        expr: up{job="zookeeper"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: coordination
+        annotations:
+          summary: "ZooKeeper service is down"
+          description: "ZooKeeper has been down for more than 2 minutes on {{ $labels.instance }}"
+          
+      - alert: DruidCoordinatorDown
+        expr: up{job="druid-coordinator"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: druid
+        annotations:
+          summary: "Druid Coordinator is down"
+          description: "Druid Coordinator has been down for more than 2 minutes on {{ $labels.instance }}"
+          
+      - alert: DruidBrokerDown
+        expr: up{job="druid-broker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: druid
+        annotations:
+          summary: "Druid Broker is down"
+          description: "Druid Broker has been down for more than 2 minutes on {{ $labels.instance }}"
+          
+      - alert: DruidRouterDown
+        expr: up{job="druid-router"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: druid
+        annotations:
+          summary: "Druid Router is down"
+          description: "Druid Router has been down for more than 2 minutes on {{ $labels.instance }}"
+
+  # Resource Usage Alerts
+  - name: resource_usage
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 3m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage is above 95% for more than 3 minutes on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 80% for more than 5 minutes on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: CriticalMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
+        for: 3m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is above 95% for more than 3 minutes on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_avail_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High disk usage detected"
+          description: "Disk usage is above 80% on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: CriticalDiskUsage
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_avail_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 90
+        for: 3m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk usage detected"
+          description: "Disk usage is above 90% on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: DiskWillFillIn24Hours
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[1h], 24 * 3600) < 0
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Disk will fill in 24 hours"
+          description: "Disk on {{ $labels.instance }} is predicted to fill within 24 hours based on current growth rate"
+
+  # Database Performance Alerts
+  - name: database_performance
+    interval: 30s
+    rules:
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL is using more than 80% of available connections on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_activity_max_tx_duration[5m]) > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "PostgreSQL has queries running for more than 30 seconds on {{ $labels.instance }}"
+          
+      - alert: MongoDBHighConnections
+        expr: mongodb_connections{state="current"} / mongodb_connections{state="available"} * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "MongoDB high connection usage"
+          description: "MongoDB is using more than 80% of available connections on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is above 80% on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis rejecting connections"
+          description: "Redis is rejecting connections on {{ $labels.instance }}, may need to increase max connections"
+
+  # Druid Performance Alerts
+  - name: druid_performance
+    interval: 30s
+    rules:
+      - alert: DruidHighQueryLatency
+        expr: histogram_quantile(0.95, rate(druid_query_time_bucket[5m])) > 5000
+        for: 5m
+        labels:
+          severity: warning
+          component: druid
+        annotations:
+          summary: "Druid high query latency"
+          description: "95th percentile query latency is above 5 seconds on {{ $labels.instance }} (current: {{ $value }}ms)"
+          
+      - alert: DruidSegmentLoadFailures
+        expr: increase(druid_segment_load_failed[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: druid
+        annotations:
+          summary: "Druid segment load failures"
+          description: "Druid has failed to load {{ $value }} segments in the last 5 minutes on {{ $labels.instance }}"
+          
+      - alert: DruidHighMemoryUsage
+        expr: druid_jvm_mem_used / druid_jvm_mem_max * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: druid
+        annotations:
+          summary: "Druid JVM memory usage high"
+          description: "Druid JVM memory usage is above 85% on {{ $labels.instance }} (current: {{ $value }}%)"
+          
+      - alert: DruidFrequentGC
+        expr: rate(druid_jvm_gc_count[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: druid
+        annotations:
+          summary: "Druid frequent garbage collection"
+          description: "Druid is performing more than 5 GC cycles per second on {{ $labels.instance }}"
+
+  # Network and HTTP Alerts
+  - name: network_http
+    interval: 30s
+    rules:
+      - alert: HighHTTP4xxRate
+        expr: sum(rate(nginx_http_requests_total{status=~"4.."}[5m])) / sum(rate(nginx_http_requests_total[5m])) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: nginx
+        annotations:
+          summary: "High rate of HTTP 4xx errors"
+          description: "More than 10% of requests are returning 4xx errors (current: {{ $value }}%)"
+          
+      - alert: HighHTTP5xxRate
+        expr: sum(rate(nginx_http_requests_total{status=~"5.."}[5m])) / sum(rate(nginx_http_requests_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: critical
+          component: nginx
+        annotations:
+          summary: "High rate of HTTP 5xx errors"
+          description: "More than 5% of requests are returning 5xx errors (current: {{ $value }}%)"
+          
+      - alert: HighNetworkLatency
+        expr: rate(node_network_receive_bytes_total[5m]) > 100000000
+        for: 10m
+        labels:
+          severity: warning
+          component: network
+        annotations:
+          summary: "High network traffic"
+          description: "Network receive rate is above 100MB/s on {{ $labels.instance }} (current: {{ $value }} bytes/s)"
+
+  # Container Health Alerts
+  - name: container_health
+    interval: 30s
+    rules:
+      - alert: ContainerRestarting
+        expr: rate(container_restart_count[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: docker
+        annotations:
+          summary: "Container is restarting"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} has restarted {{ $value }} times in the last 5 minutes"
+          
+      - alert: ContainerHighCPU
+        expr: (sum(rate(container_cpu_usage_seconds_total[5m])) by (name, instance) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: docker
+        annotations:
+          summary: "Container high CPU usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using more than 80% CPU (current: {{ $value }}%)"
+          
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: docker
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} is using more than 80% of allocated memory (current: {{ $value }}%)"
+          
+      - alert: ContainerOOMKilled
+        expr: container_oom_events_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: docker
+        annotations:
+          summary: "Container killed by OOM"
+          description: "Container {{ $labels.name }} on {{ $labels.instance }} was killed by out-of-memory killer"
+
+  # Backup and Certificate Alerts
+  - name: backup_certificates
+    interval: 1h
+    rules:
+      - alert: BackupFailed
+        expr: time() - backup_last_success_timestamp_seconds > 86400
+        for: 1h
+        labels:
+          severity: critical
+          component: backup
+        annotations:
+          summary: "Backup has not run successfully"
+          description: "No successful backup in the last 24 hours on {{ $labels.instance }}"
+          
+      - alert: SSLCertificateExpiringSoon
+        expr: (ssl_certificate_expiry_timestamp - time()) / 86400 < 7
+        for: 1h
+        labels:
+          severity: warning
+          component: ssl
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.domain }} will expire in {{ $value }} days"
+          
+      - alert: SSLCertificateExpired
+        expr: ssl_certificate_expiry_timestamp - time() < 0
+        for: 1h
+        labels:
+          severity: critical
+          component: ssl
+        annotations:
+          summary: "SSL certificate has expired"
+          description: "SSL certificate for {{ $labels.domain }} has expired"
+
+  # Application-Specific Alerts
+  - name: application_alerts
+    interval: 30s
+    rules:
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High application response time"
+          description: "95th percentile response time is above 2 seconds on {{ $labels.instance }} (current: {{ $value }}s)"
+          
+      - alert: HealthCheckFailing
+        expr: probe_success == 0
+        for: 3m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Health check is failing"
+          description: "Health check for {{ $labels.instance }} has been failing for more than 3 minutes"
+          
+      - alert: HighErrorRate
+        expr: rate(application_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High application error rate"
+          description: "Application is generating more than 10 errors per second on {{ $labels.instance }} (current: {{ $value }}/s)"
+
+  # General Infrastructure Alerts
+  - name: infrastructure
+    interval: 30s
+    rules:
+      - alert: HostDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Host is unreachable"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been unreachable for more than 5 minutes"
+          
+      - alert: HighLoadAverage
+        expr: node_load15 / count(node_cpu_seconds_total{mode="idle"}) without (cpu, mode) > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High load average"
+          description: "Load average is more than 2x CPU count on {{ $labels.instance }} (current: {{ $value }})"
+          
+      - alert: ClockSkew
+        expr: abs(node_timex_offset_seconds) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "System clock skew detected"
+          description: "Clock on {{ $labels.instance }} is off by {{ $value }} seconds"
+          
+      - alert: FileDescriptorsHigh
+        expr: node_filefd_allocated / node_filefd_maximum * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High file descriptor usage"
+          description: "File descriptor usage is above 80% on {{ $labels.instance }} (current: {{ $value }}%)"
