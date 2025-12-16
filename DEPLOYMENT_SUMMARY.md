@@ -149,6 +149,10 @@ PRODUCTION_QUICKSTART.md      # 5-step deployment guide
 DEPLOYMENT_SUMMARY.md         # This file
 README.md                     # Updated with payment info
 payment/README.md             # Payment integration docs
+dns/
+├── records.txt               # DNS records template with www CNAME
+├── cloudflare-setup.md       # Cloudflare configuration guide
+└── validation-script.sh      # Automated DNS validation
 docs/
 ├── DEPLOYMENT_GUIDE.md       # Existing, complete
 ├── APPLICATION_SETUP.md      # Existing, complete

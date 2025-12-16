@@ -88,15 +88,27 @@ Configure these DNS records for `horizen-network.com`:
 ```
 Type    Name      Value              TTL
 A       @         YOUR_SERVER_IP     3600
+CNAME   www       horizen-network.com  3600  <- REQUIRED for www subdomain
 A       druid     YOUR_SERVER_IP     3600
 A       geniess   YOUR_SERVER_IP     3600
 A       entity    YOUR_SERVER_IP     3600
-CNAME   www       horizen-network.com  3600
 ```
+
+**Important**: The www CNAME record is **REQUIRED** so that www.horizen-network.com resolves correctly.
+
+For detailed DNS setup instructions:
+- See [DNS Records Template](dns/records.txt)
+- See [Cloudflare Setup Guide](dns/cloudflare-setup.md)
+- See [DNS Configuration Guide](docs/DNS_CONFIGURATION.md)
 
 Verify DNS propagation:
 ```bash
+# Automated validation
+./dns/validation-script.sh
+
+# Manual checks
 dig horizen-network.com +short
+dig www.horizen-network.com +short
 dig druid.horizen-network.com +short
 ```
 
