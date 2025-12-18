@@ -52,13 +52,32 @@ if [ -z "$DOMAIN" ] || [ -z "$SSL_EMAIL" ]; then
     exit 1
 fi
 
+# Verify DNS before requesting SSL certificates
+echo -e "\n${YELLOW}Verifying DNS configuration before SSL setup...${NC}"
+if [ -f dns/scripts/verify-dns.sh ]; then
+    if ./dns/scripts/verify-dns.sh --quick; then
+        echo -e "${GREEN}✓ DNS verification passed${NC}"
+    else
+        echo -e "${RED}✗ DNS verification failed${NC}"
+        echo -e "${YELLOW}SSL certificates require proper DNS configuration${NC}"
+        echo -e "Please ensure:"
+        echo -e "  1. DNS A record points to this server"
+        echo -e "  2. All subdomains resolve correctly"
+        echo -e "  3. DNS has propagated globally"
+        echo -e "\nRun: ./dns/scripts/verify-dns.sh for details"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠ DNS verification script not found, skipping DNS check${NC}"
+fi
+
 # Create SSL directory
 mkdir -p ssl
 
 # Get certificates
 echo -e "\n${YELLOW}Obtaining SSL certificates...${NC}"
 echo -e "Domain: $DOMAIN"
-echo -e "Subdomains: www.$DOMAIN, druid.$DOMAIN, geniess.$DOMAIN"
+echo -e "Subdomains: www.$DOMAIN, druid.$DOMAIN, geniess.$DOMAIN, entity.$DOMAIN, api.$DOMAIN"
 echo -e "Email: $SSL_EMAIL"
 
 # Stop nginx temporarily for standalone mode
@@ -77,7 +96,9 @@ certbot certonly \
     -d "$DOMAIN" \
     -d "www.$DOMAIN" \
     -d "druid.$DOMAIN" \
-    -d "geniess.$DOMAIN"
+    -d "geniess.$DOMAIN" \
+    -d "entity.$DOMAIN" \
+    -d "api.$DOMAIN"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ SSL certificates obtained successfully${NC}"
@@ -144,4 +165,6 @@ echo -e "  https://$DOMAIN"
 echo -e "  https://www.$DOMAIN"
 echo -e "  https://druid.$DOMAIN"
 echo -e "  https://geniess.$DOMAIN"
+echo -e "  https://entity.$DOMAIN"
+echo -e "  https://api.$DOMAIN"
 echo -e "\nCertificates will be automatically renewed."

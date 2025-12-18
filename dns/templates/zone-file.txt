@@ -1,0 +1,56 @@
+; Zone file for horizen-network.com
+; BIND format - compatible with most DNS servers
+; Replace YOUR_SERVER_IP with your actual server IP address
+
+$ORIGIN horizen-network.com.
+$TTL 3600
+
+; SOA (Start of Authority) Record
+; Format: domain. IN SOA primary-nameserver admin-email (serial refresh retry expire minimum)
+@       IN  SOA  ns1.horizen-network.com. admin.horizen-network.com. (
+                2024121601  ; Serial (YYYYMMDDNN format)
+                7200        ; Refresh (2 hours)
+                3600        ; Retry (1 hour)
+                1209600     ; Expire (2 weeks)
+                3600 )      ; Minimum TTL (1 hour)
+
+; NS (Nameserver) Records
+; Specify your nameservers here
+; @       IN  NS   ns1.horizen-network.com.
+; @       IN  NS   ns2.horizen-network.com.
+
+; A Record (IPv4 Address)
+; Points domain to server IP
+@       IN  A        YOUR_SERVER_IP
+
+; CNAME Records (Canonical Name - Aliases)
+; Points subdomains to main domain
+www     IN  CNAME    horizen-network.com.
+druid   IN  CNAME    horizen-network.com.
+geniess IN  CNAME    horizen-network.com.
+entity  IN  CNAME    horizen-network.com.
+api     IN  CNAME    horizen-network.com.
+
+; CAA Records (Certificate Authority Authorization)
+; Specifies which CAs can issue SSL certificates
+; Format: flags tag "value"
+@       IN  CAA      0 issue "letsencrypt.org"
+@       IN  CAA      0 issuewild "letsencrypt.org"
+
+; TXT Records (Text Records)
+; SPF record to prevent email spoofing (optional)
+@       IN  TXT      "v=spf1 -all"
+
+; AAAA Records (IPv6 Address) - Optional
+; Uncomment and add your IPv6 address if available
+; @       IN  AAAA     2001:db8::1
+; druid   IN  AAAA     2001:db8::1
+; geniess IN  AAAA     2001:db8::1
+; entity  IN  AAAA     2001:db8::1
+; api     IN  AAAA     2001:db8::1
+
+; Notes:
+; - All domain names in RDATA must end with a dot (.)
+; - TTL is in seconds (3600 = 1 hour)
+; - Serial number should be incremented with each change
+; - Use YYYYMMDDNN format for serial (NN = revision number for that day)

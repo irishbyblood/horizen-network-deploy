@@ -16,6 +16,26 @@ echo -e "${GREEN}=== Horizen Network Deployment Script ===${NC}"
 # Check prerequisites
 echo -e "\n${YELLOW}Checking prerequisites...${NC}"
 
+# Check DNS configuration for production deployments
+if [ "$1" = "prod" ] || [ "$1" = "production" ]; then
+    if [ -f dns/scripts/verify-dns.sh ]; then
+        echo -e "${YELLOW}Verifying DNS configuration...${NC}"
+        if ./dns/scripts/verify-dns.sh --quick; then
+            echo -e "${GREEN}✓ DNS verification passed${NC}"
+        else
+            echo -e "${YELLOW}⚠ DNS verification failed or incomplete${NC}"
+            echo -e "${YELLOW}It's recommended to fix DNS before deploying to production${NC}"
+            read -p "Continue anyway? (y/N) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}Deployment cancelled. Please configure DNS first.${NC}"
+                echo -e "See dns/README.md for DNS setup instructions"
+                exit 1
+            fi
+        fi
+    fi
+fi
+
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}Error: Docker is not installed${NC}"
     exit 1
