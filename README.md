@@ -346,12 +346,6 @@ docker-compose exec redis redis-cli ping
 
 ## 🤝 Contributing
 
-This repository is in the public domain. Feel free to use, modify, and distribute as needed.
-
-## 📄 License
-
-This project is released into the public domain under the Unlicense. See [LICENSE](LICENSE) for details.
-
 ## 🆘 Support
 
 For issues and questions:
