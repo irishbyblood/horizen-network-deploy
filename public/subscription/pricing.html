@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - Horizen Network</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .pricing-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        
+        .pricing-header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        .pricing-header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .pricing-header p {
+            font-size: 1.2em;
+            color: #666;
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        
+        .pricing-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+        }
+        
+        .pricing-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .pricing-card.featured {
+            border-color: #4CAF50;
+            border-width: 3px;
+        }
+        
+        .pricing-badge {
+            position: absolute;
+            top: -15px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .pricing-card h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .pricing-card .price {
+            font-size: 3em;
+            font-weight: bold;
+            color: #4CAF50;
+            margin: 20px 0;
+        }
+        
+        .pricing-card .price .currency {
+            font-size: 0.5em;
+            vertical-align: super;
+        }
+        
+        .pricing-card .period {
+            color: #666;
+            font-size: 1em;
+        }
+        
+        .features-list {
+            list-style: none;
+            padding: 0;
+            margin: 30px 0;
+            text-align: left;
+        }
+        
+        .features-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .features-list li:before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .cta-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+        }
+        
+        .cta-button:hover {
+            background: #45a049;
+        }
+        
+        .cta-button.secondary {
+            background: #2196F3;
+        }
+        
+        .cta-button.secondary:hover {
+            background: #0b7dda;
+        }
+        
+        .comparison-table {
+            margin-top: 60px;
+            overflow-x: auto;
+        }
+        
+        .comparison-table table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .comparison-table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        
+        .comparison-table td:not(:first-child) {
+            text-align: center;
+        }
+        
+        .feature-available {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .feature-unavailable {
+            color: #ccc;
+        }
+        
+        .trial-notice {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 20px;
+            margin: 40px 0;
+            border-radius: 4px;
+        }
+        
+        .faq-section {
+            margin-top: 60px;
+        }
+        
+        .faq-item {
+            background: white;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .faq-item h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .faq-item p {
+            color: #666;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1><a href="/" style="color: inherit; text-decoration: none;">🌐 Horizen Network</a></h1>
+            </div>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/subscription/pricing.html">Pricing</a>
+                <a href="/subscription/index.html">Dashboard</a>
+            </nav>
+        </header>
+
+        <div class="pricing-container">
+            <div class="pricing-header">
+                <h1>Choose Your Plan</h1>
+                <p>Unlock powerful analytics and AI capabilities</p>
+            </div>
+
+            <div class="trial-notice">
+                <h3>🎁 Free Trial Available</h3>
+                <p>Try any plan free for 7 days. No credit card required for trial. Cancel anytime.</p>
+            </div>
+
+            <div class="pricing-grid">
+                <!-- Entity Plan -->
+                <div class="pricing-card">
+                    <h2>Entity AI</h2>
+                    <div class="price">
+                        <span class="currency">$</span>5<span class="period">/month</span>
+                    </div>
+                    <p>Perfect for individuals and small teams</p>
+                    <ul class="features-list">
+                        <li>Entity AI web application access</li>
+                        <li>AI-powered insights</li>
+                        <li>Mobile-ready interface</li>
+                        <li>Email support</li>
+                        <li>Regular updates</li>
+                    </ul>
+                    <a href="/subscription/checkout.html?plan=entity" class="cta-button secondary">
+                        Get Started
+                    </a>
+                </div>
+
+                <!-- Druid + Geniess Bundle (Featured) -->
+                <div class="pricing-card featured">
+                    <div class="pricing-badge">Most Popular</div>
+                    <h2>Druid + Geniess</h2>
+                    <div class="price">
+                        <span class="currency">$</span>15<span class="period">/month</span>
+                    </div>
+                    <p>Complete analytics and intelligence platform</p>
+                    <ul class="features-list">
+                        <li>Everything in Entity AI</li>
+                        <li>Apache Druid analytics database</li>
+                        <li>Geniess intelligence platform</li>
+                        <li>Real-time data processing</li>
+                        <li>Advanced visualizations</li>
+                        <li>SQL query interface</li>
+                        <li>Data ingestion tools</li>
+                        <li>Priority email support</li>
+                        <li>Custom integrations</li>
+                    </ul>
+                    <a href="/subscription/checkout.html?plan=druid_geniess" class="cta-button">
+                        Get Started
+                    </a>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="comparison-table">
+                <h2 style="text-align: center; margin-bottom: 30px;">Feature Comparison</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Entity AI</th>
+                            <th>Druid + Geniess</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Entity AI Application</td>
+                            <td><span class="feature-available">✓</span></td>
+                            <td><span class="feature-available">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>Apache Druid Analytics</td>
+                            <td><span class="feature-unavailable">—</span></td>
+                            <td><span class="feature-available">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>Geniess Intelligence Platform</td>
+                            <td><span class="feature-unavailable">—</span></td>
+                            <td><span class="feature-available">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>Real-time Data Processing</td>
+                            <td><span class="feature-unavailable">—</span></td>
+                            <td><span class="feature-available">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>SQL Query Interface</td>
+                            <td><span class="feature-unavailable">—</span></td>
+                            <td><span class="feature-available">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>Data Visualization</td>
+                            <td>Basic</td>
+                            <td>Advanced</td>
+                        </tr>
+                        <tr>
+                            <td>Storage</td>
+                            <td>1 GB</td>
+                            <td>Unlimited</td>
+                        </tr>
+                        <tr>
+                            <td>Support</td>
+                            <td>Email</td>
+                            <td>Priority Email</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- FAQ Section -->
+            <div class="faq-section">
+                <h2 style="text-align: center; margin-bottom: 30px;">Frequently Asked Questions</h2>
+                
+                <div class="faq-item">
+                    <h3>How does the free trial work?</h3>
+                    <p>Sign up for any plan and get 7 days of free access. No credit card required during trial. You'll only be charged after the trial ends if you continue.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>Can I cancel anytime?</h3>
+                    <p>Yes! You can cancel your subscription at any time. Your access will continue until the end of your billing period.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>Can I upgrade or downgrade my plan?</h3>
+                    <p>Yes, you can change your plan at any time. Changes are prorated based on your billing cycle.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>What payment methods do you accept?</h3>
+                    <p>We accept all major credit and debit cards through our secure payment processor, Stripe.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>Is my data secure?</h3>
+                    <p>Yes! We use industry-standard encryption and security practices. Payment processing is PCI-compliant through Stripe.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>Do you offer refunds?</h3>
+                    <p>We offer a 30-day money-back guarantee. If you're not satisfied, contact us for a full refund.</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <div class="footer-content">
+                <p>&copy; 2024 Horizen Network. All rights reserved.</p>
+                <div class="footer-links">
+                    <a href="/">Home</a>
+                    <span>•</span>
+                    <a href="/subscription/pricing.html">Pricing</a>
+                    <span>•</span>
+                    <a href="/subscription/index.html">Dashboard</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
