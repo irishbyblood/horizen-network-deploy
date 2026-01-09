@@ -20,42 +20,57 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Backup Script
-        uses: appleboy/ssh-action@master
+      - name: Run Backup Script (with retry)
+        id: backup
+        uses: nick-fields/retry@v2
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USERNAME }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            cd /opt/horizen-network-deploy
-            ./scripts/backup.sh
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 60
+          command: |
+            ssh -o StrictHostKeyChecking=no ${{ secrets.PRODUCTION_USERNAME }}@${{ secrets.PRODUCTION_HOST }} '
+              cd /opt/horizen-network-deploy
+              ./scripts/backup.sh
+            '
 
-      - name: Upload Backup to S3
-        uses: appleboy/ssh-action@master
+      - name: Upload Backup to S3 (with retry)
+        id: s3_upload
+        uses: nick-fields/retry@v2
         if: success()
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USERNAME }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            # Install AWS CLI if not present
-            if ! command -v aws &> /dev/null; then
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip awscliv2.zip
-              sudo ./aws/install
-            fi
-            
-            # Configure AWS credentials
-            export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-            export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            export AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }}
-            
-            # Upload latest backups to S3
-            cd /opt/horizen-network-deploy
-            LATEST_BACKUP=$(ls -t backups/*.tar.gz | head -1)
-            aws s3 cp "$LATEST_BACKUP" s3://${{ secrets.BACKUP_BUCKET }}/horizen-network/
+          timeout_minutes: 20
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            ssh -o StrictHostKeyChecking=no ${{ secrets.PRODUCTION_USERNAME }}@${{ secrets.PRODUCTION_HOST }} '
+              # Install AWS CLI if not present
+              if ! command -v aws &> /dev/null; then
+                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                unzip -q awscliv2.zip
+                sudo ./aws/install
+                rm -rf awscliv2.zip aws
+              fi
+              
+              # Configure AWS credentials
+              export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+              export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              export AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }}
+              
+              # Upload latest backups to S3
+              cd /opt/horizen-network-deploy
+              LATEST_BACKUP=$(ls -t backups/*.tar.gz 2>/dev/null | head -1)
+              
+              if [ -n "$LATEST_BACKUP" ]; then
+                echo "Uploading $LATEST_BACKUP to S3..."
+                aws s3 cp "$LATEST_BACKUP" "s3://${{ secrets.BACKUP_BUCKET }}/horizen-network/" --no-progress
+                echo "Upload completed"
+              else
+                echo "No backup file found"
+                exit 1
+              fi
+            '
 
-      - name: Verify Backup
+      - name: Verify Backup Integrity
         uses: appleboy/ssh-action@master
         if: success()
         with:
@@ -64,31 +79,97 @@ jobs:
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
             cd /opt/horizen-network-deploy/backups
-            LATEST_BACKUP=$(ls -t *.tar.gz | head -1)
+            LATEST_BACKUP=$(ls -t *.tar.gz 2>/dev/null | head -1)
+            
             if [ -f "$LATEST_BACKUP" ]; then
-              SIZE=$(stat -f%z "$LATEST_BACKUP" 2>/dev/null || stat -c%s "$LATEST_BACKUP")
+              # Check file size
+              SIZE=$(stat -c%s "$LATEST_BACKUP" 2>/dev/null || stat -f%z "$LATEST_BACKUP" 2>/dev/null)
               if [ "$SIZE" -gt 1000 ]; then
-                echo "Backup verified: $LATEST_BACKUP (Size: $SIZE bytes)"
+                echo "✓ Backup file size OK: $(($SIZE / 1024 / 1024)) MB"
               else
-                echo "Backup file too small, may be corrupt"
+                echo "✗ Backup file too small: $SIZE bytes"
                 exit 1
               fi
+              
+              # Test archive integrity
+              if tar -tzf "$LATEST_BACKUP" >/dev/null 2>&1; then
+                echo "✓ Backup archive integrity verified"
+              else
+                echo "✗ Backup archive is corrupted"
+                exit 1
+              fi
+              
+              echo "Backup verified: $LATEST_BACKUP"
             else
               echo "No backup file found"
               exit 1
             fi
 
+      - name: Verify S3 Upload
+        if: success()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            export AWS_DEFAULT_REGION=${{ secrets.AWS_REGION }}
+            
+            # List recent backups in S3
+            echo "Recent backups in S3:"
+            aws s3 ls "s3://${{ secrets.BACKUP_BUCKET }}/horizen-network/" --recursive | tail -5
+
+      - name: Cleanup Old Backups
+        if: success()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy/backups
+            # Keep last 30 days locally
+            find . -name "*.tar.gz" -mtime +30 -delete
+            find . -name "*.sql.gz" -mtime +30 -delete
+            echo "Old backups cleaned up"
+
       - name: Notify Success
         if: success()
-        run: |
-          echo "Backup completed successfully"
-          # Add notification logic here (Slack, email, etc.)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            if [ -f ./scripts/notify.sh ]; then
+              LATEST_BACKUP=$(ls -t backups/*.tar.gz 2>/dev/null | head -1 | xargs basename)
+              BACKUP_SIZE=$(stat -c%s "backups/$LATEST_BACKUP" 2>/dev/null | awk '{print int($1/1024/1024)"MB"}' || echo "unknown")
+              ./scripts/notify.sh \
+                -m "Production backup completed successfully. File: $LATEST_BACKUP (Size: $BACKUP_SIZE)" \
+                -t "Backup Success" \
+                -s success \
+                --all || echo "Notification failed but backup succeeded"
+            fi
 
       - name: Notify Failure
         if: failure()
-        run: |
-          echo "Backup failed!"
-          # Add notification logic here (Slack, email, etc.)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            if [ -f ./scripts/notify.sh ]; then
+              ./scripts/notify.sh \
+                -m "Production backup failed. Please investigate immediately." \
+                -t "Backup Failed" \
+                -s error \
+                --all || echo "Notification failed"
+            fi
 
   backup-staging:
     name: Backup Staging Data

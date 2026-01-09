@@ -1,0 +1,260 @@
+---
+# Default deny all ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: horizen-network
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# Allow Nginx to receive traffic from anywhere
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nginx-ingress
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx
+  policyTypes:
+    - Ingress
+  ingress:
+    - from: []  # Allow from anywhere
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+
+---
+# Allow Nginx to communicate with Druid Router
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nginx-to-druid-router
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: druid
+      component: router
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: nginx
+      ports:
+        - protocol: TCP
+          port: 8888
+
+---
+# Allow Druid components to communicate with ZooKeeper
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: druid-to-zookeeper
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: zookeeper
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: druid
+      ports:
+        - protocol: TCP
+          port: 2181
+        - protocol: TCP
+          port: 2888
+        - protocol: TCP
+          port: 3888
+
+---
+# Allow Druid components to communicate with PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: druid-to-postgres
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: druid
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+# Allow Druid Broker to communicate with Druid Historical
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: druid-broker-to-historical
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: druid
+      component: historical
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: druid
+              component: broker
+      ports:
+        - protocol: TCP
+          port: 8083
+
+---
+# Allow Druid Router to communicate with Broker and Coordinator
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: druid-router-to-services
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: druid
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: druid
+              component: router
+      ports:
+        - protocol: TCP
+          port: 8081  # Coordinator
+        - protocol: TCP
+          port: 8082  # Broker
+
+---
+# Allow Prometheus to scrape metrics from all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-scrape
+  namespace: horizen-network
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 8080
+
+---
+# Allow applications to use Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-access
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: druid
+      ports:
+        - protocol: TCP
+          port: 6379
+
+---
+# Allow applications to use MongoDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-access
+  namespace: horizen-network
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: druid
+      ports:
+        - protocol: TCP
+          port: 27017
+
+---
+# Allow DNS queries
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: horizen-network
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# Allow egress to internet for updates and external APIs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+  namespace: horizen-network
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
+    - to:
+        - namespaceSelector: {}
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
