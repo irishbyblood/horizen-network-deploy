@@ -14,6 +14,14 @@ import uvicorn
 
 # Configuration
 AUTH_BILLING_URL = os.getenv("AUTH_BILLING_URL", "http://auth-billing:8000")
+# Fallback to localhost if auth-billing hostname doesn't resolve (for local testing)
+if AUTH_BILLING_URL == "http://auth-billing:8000":
+    try:
+        import socket
+        socket.gethostbyname("auth-billing")
+    except socket.gaierror:
+        AUTH_BILLING_URL = "http://localhost:8000"
+
 REQUIRED_ENTITLEMENT = "ENTITY"
 
 # Security
