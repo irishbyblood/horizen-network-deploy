@@ -25,7 +25,11 @@ app = FastAPI(
 )
 
 # Configure CORS
-# Allow all origins for development, restrict in production
+# NOTE: For production deployment, consider:
+# 1. Restricting localhost to specific ports (e.g., "http://localhost:8000")
+# 2. Limiting allowed methods to only what's needed (e.g., ["GET", "POST"])
+# 3. Restricting headers to specific ones required by your application
+# 4. Setting allow_credentials=False if not needed
 origins = [
     "http://localhost",
     "http://localhost:80",
@@ -147,13 +151,17 @@ async def extract_text(request: TextExtractionRequest):
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
         elif request.source_type == "url":
-            # URL extraction (placeholder - would need requests/beautifulsoup in production)
+            # URL extraction (placeholder - requires additional libraries)
+            # To implement full URL extraction, add to requirements.txt:
+            # - beautifulsoup4>=4.12.0
+            # - html2text>=2020.1.16
+            # Then implement web scraping logic here
             extracted_text = f"Text extraction from URL: {request.source}"
             metadata = {
                 "source_type": "url",
                 "source_url": request.source,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "note": "Full implementation requires web scraping libraries"
+                "note": "This is a placeholder. Full implementation requires web scraping libraries (beautifulsoup4, html2text)"
             }
         else:
             raise HTTPException(
