@@ -1,0 +1,220 @@
+"""
+Entity Service - Unified AI application with entitlement-based access control.
+Requires ENTITY entitlement.
+"""
+import os
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+import httpx
+import uvicorn
+
+# Configuration
+AUTH_BILLING_URL = os.getenv("AUTH_BILLING_URL", "http://auth-billing:8000")
+REQUIRED_ENTITLEMENT = "ENTITY"
+
+# Security
+security = HTTPBearer()
+
+# FastAPI app
+app = FastAPI(
+    title="Entity Service",
+    description="Entity unified AI application - requires ENTITY entitlement",
+    version="1.0.0",
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Entitlement validation
+async def verify_entitlement(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Verify user has required entitlement by calling auth-billing service."""
+    token = credentials.credentials
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"{AUTH_BILLING_URL}/api/auth/verify",
+                params={"entitlement": REQUIRED_ENTITLEMENT},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication credentials",
+                )
+            
+            result = response.json()
+            
+            if not result.get("has_access"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Access denied. Required entitlement: {REQUIRED_ENTITLEMENT}",
+                )
+            
+            return result
+            
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Auth service unavailable",
+            )
+
+# Routes
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """Root endpoint with simple UI."""
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Entity - Unified AI Platform</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .container {
+                background-color: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #2c3e50;
+            }
+            .feature {
+                margin: 20px 0;
+                padding: 15px;
+                background-color: #e8f4f8;
+                border-radius: 5px;
+            }
+            .note {
+                color: #7f8c8d;
+                font-size: 14px;
+                margin-top: 20px;
+            }
+            .price {
+                font-size: 24px;
+                color: #27ae60;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎯 Entity - Unified AI Platform</h1>
+            <p>Welcome to Entity - The comprehensive unified AI application platform.</p>
+            
+            <div class="feature">
+                <h3>Features:</h3>
+                <ul>
+                    <li>Unified AI application framework</li>
+                    <li>Advanced entity management</li>
+                    <li>Multi-model AI orchestration</li>
+                    <li>Enterprise-grade capabilities</li>
+                    <li>Real-time processing</li>
+                </ul>
+            </div>
+            
+            <div class="feature">
+                <h3>Access Requirements:</h3>
+                <p>This service requires the <strong>Entity Service</strong> subscription.</p>
+                <p class="price">$10/month</p>
+                <p>Contact admin@horizen-network.com to upgrade your account.</p>
+            </div>
+            
+            <div class="note">
+                <p><strong>Note:</strong> This is a minimal v1 implementation. Full UI and features coming soon.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "entity"}
+
+@app.get("/api/info")
+async def get_info(entitlement_check: dict = Depends(verify_entitlement)):
+    """Get service information (requires entitlement)."""
+    return {
+        "service": "Entity Unified AI Platform",
+        "version": "1.0.0",
+        "status": "operational",
+        "features": [
+            "Unified AI framework",
+            "Entity management",
+            "Multi-model orchestration",
+            "Enterprise capabilities",
+        ],
+        "user_entitlements": entitlement_check.get("entitlements", []),
+    }
+
+@app.get("/api/entities")
+async def list_entities(entitlement_check: dict = Depends(verify_entitlement)):
+    """List available entities (requires entitlement)."""
+    return {
+        "entities": [
+            {
+                "id": "entity-001",
+                "name": "Sample Entity",
+                "type": "ai-model",
+                "status": "active",
+            },
+            {
+                "id": "entity-002",
+                "name": "Analytics Entity",
+                "type": "analytics",
+                "status": "active",
+            },
+        ]
+    }
+
+@app.post("/api/process")
+async def process_entity(
+    data: dict,
+    entitlement_check: dict = Depends(verify_entitlement)
+):
+    """Process entity data (requires entitlement)."""
+    # Placeholder implementation
+    return {
+        "status": "success",
+        "message": "Entity processing completed",
+        "results": {
+            "entity_id": data.get("entity_id", "unknown"),
+            "processing_time": "0.8s",
+            "output": "Placeholder output - full implementation coming soon",
+        }
+    }
+
+@app.get("/api/orchestration/status")
+async def get_orchestration_status(entitlement_check: dict = Depends(verify_entitlement)):
+    """Get orchestration system status (requires entitlement)."""
+    return {
+        "status": "operational",
+        "active_workflows": 0,
+        "queued_tasks": 0,
+        "completed_today": 0,
+    }
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", "8002"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

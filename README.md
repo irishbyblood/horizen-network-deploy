@@ -6,14 +6,21 @@
 
 ## 🌐 Overview
 
-Horizen Network is a comprehensive deployment infrastructure for hosting advanced data analytics and intelligence platforms. This repository contains all configuration files, documentation, scripts, and infrastructure-as-code needed to deploy a production-ready website along with Apache Druid and Geniess applications.
+Horizen Network is a comprehensive deployment infrastructure for hosting advanced data analytics and intelligence platforms with **one-login authentication**. This repository contains all configuration files, documentation, scripts, and infrastructure-as-code needed to deploy a production-ready website along with Apache Druid, Geniess AI platform, and Entity unified AI application.
 
 ## ✨ Features
 
+- **One-Login Architecture**: Single authentication system for all services
+- **Bundle Pricing Model**: 
+  - Druid + Geniess Bundle: $5/month
+  - Entity Service: $10/month
 - **Real-Time Analytics**: Apache Druid for fast slice-and-dice analytics on large datasets
-- **Enterprise Intelligence**: Geniess application for advanced data processing
+- **AI-Powered Intelligence**: Geniess and Entity applications for advanced AI processing
+- **Secure Authentication**: JWT-based authentication with bcrypt password hashing
+- **Entitlement-Based Access**: Fine-grained access control for services
+- **Stripe Integration**: Payment processing and subscription management (phase 1 scaffolding)
 - **Docker Infrastructure**: Complete containerized deployment with Docker Compose
-- **Nginx Reverse Proxy**: High-performance web server and reverse proxy
+- **Nginx Reverse Proxy**: High-performance web server with subdomain and path-based routing
 - **Automated Deployment**: Scripts for deployment, backup, SSL setup, and health checks
 - **Production Ready**: Separate configurations for development and production environments
 - **Security Focused**: SSL/TLS support, security headers, and best practices
@@ -21,35 +28,54 @@ Horizen Network is a comprehensive deployment infrastructure for hosting advance
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Nginx (Reverse Proxy)                    │
-│                    Port 80 (HTTP) / 443 (HTTPS)                 │
-└───────────┬────────────────┬────────────────┬────────────────────┘
-            │                │                │
-            ▼                ▼                ▼
-    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-    │   Website    │  │ Druid Router │  │   Geniess    │
-    │ (Static HTML)│  │   :8888      │  │  (External)  │
-    └──────────────┘  └──────┬───────┘  └──────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-       ┌────────────┐ ┌────────────┐ ┌────────────┐
-       │Coordinator │ │   Broker   │ │ Historical │
-       │   :8081    │ │   :8082    │ │   :8083    │
-       └─────┬──────┘ └──────┬─────┘ └──────┬─────┘
-             │                │              │
-             └────────┬───────┴──────────────┘
-                      ▼
-          ┌──────────────────────────┐
-          │     Infrastructure       │
-          ├──────────────────────────┤
-          │  PostgreSQL (Metadata)   │
-          │  ZooKeeper (Coordination)│
-          │  MongoDB (Application)   │
-          │  Redis (Caching)         │
-          └──────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Nginx (Reverse Proxy)                            │
+│                    Port 80 (HTTP) / 443 (HTTPS)                         │
+│  Routes: /, /druid/, /geniess/, /entity/, /api/                        │
+│  Subdomains: druid.*, geniess.*, entity.*, api.*                       │
+└──────┬──────────┬──────────┬──────────┬──────────┬────────────────────┘
+       │          │          │          │          │
+       ▼          ▼          ▼          ▼          ▼
+  ┌─────────┐ ┌──────┐ ┌─────────┐ ┌────────┐ ┌──────────────┐
+  │ Website │ │Druid │ │ Geniess │ │ Entity │ │Auth-Billing  │
+  │(Static) │ │:8888 │ │  :8001  │ │ :8002  │ │   :8000      │
+  └─────────┘ └──┬───┘ └────┬────┘ └───┬────┘ └──────┬───────┘
+                 │          │          │             │
+                 │      ┌───┴──────────┴─────────────┘
+                 │      │  (Entitlement Validation)
+                 │      │
+       ┌─────────┴──────┼──────────────┐
+       ▼                ▼              ▼
+ ┌────────────┐  ┌────────────┐ ┌────────────┐
+ │Coordinator │  │   Broker   │ │ Historical │
+ │   :8081    │  │   :8082    │ │   :8083    │
+ └─────┬──────┘  └──────┬─────┘ └──────┬─────┘
+       │                │              │
+       └────────────────┼──────────────┘
+                        ▼
+           ┌──────────────────────────┐
+           │     Infrastructure       │
+           ├──────────────────────────┤
+           │  PostgreSQL (Metadata)   │
+           │  ZooKeeper (Coordination)│
+           │  MongoDB (Application)   │
+           │  Redis (Caching)         │
+           └──────────────────────────┘
 ```
+
+## 💰 Pricing & Entitlements
+
+Horizen Network uses a **one-login, bundle-based pricing model**:
+
+| Bundle | Price | Services Included | Entitlement |
+|--------|-------|-------------------|-------------|
+| **Druid + Geniess Bundle** | $5/month | Apache Druid Analytics + Geniess AI Platform | `BUNDLE_DRUID_GENIESS` |
+| **Entity Service** | $10/month | Entity Unified AI Application | `ENTITY` |
+
+- Single account provides access to all entitled services
+- JWT-based authentication across all services
+- Entitlement validation enforced at the service level
+- Stripe integration for payment processing
 
 ## 🚀 Quick Start
 
@@ -75,6 +101,15 @@ Horizen Network is a comprehensive deployment infrastructure for hosting advance
    cp .env.example .env
    nano .env  # Edit with your configuration
    ```
+   
+   **Required Secrets to Configure:**
+   - `JWT_SECRET_KEY`: Secure random key for JWT token signing (generate with `openssl rand -hex 32`)
+   - `POSTGRES_PASSWORD`: PostgreSQL database password
+   - `MONGO_PASSWORD`: MongoDB password
+   - `REDIS_PASSWORD`: Redis password
+   - `STRIPE_API_KEY`: Stripe secret API key (for payment processing)
+   - `STRIPE_WEBHOOK_SECRET`: Stripe webhook secret
+   - `STRIPE_PUBLISHABLE_KEY`: Stripe publishable key
 
 3. **Configure DNS** (required for production):
    ```bash
@@ -227,7 +262,41 @@ After deployment, access your services at:
 
 - **Main Website**: `http://horizen-network.com`
 - **Druid Console**: `http://druid.horizen-network.com` or `http://horizen-network.com/druid`
-- **Geniess**: `http://geniess.horizen-network.com`
+- **Geniess AI Platform**: `http://geniess.horizen-network.com` or `http://horizen-network.com/geniess`
+- **Entity Unified AI**: `http://entity.horizen-network.com` or `http://horizen-network.com/entity`
+- **API/Auth**: `http://api.horizen-network.com` or `http://horizen-network.com/api`
+
+### Authentication & Access
+
+All services (except the main website) require authentication:
+
+1. **Register an account**: `POST http://api.horizen-network.com/api/auth/register`
+   ```json
+   {
+     "email": "user@example.com",
+     "password": "securepassword",
+     "full_name": "User Name"
+   }
+   ```
+
+2. **Login**: `POST http://api.horizen-network.com/api/auth/login`
+   ```json
+   {
+     "email": "user@example.com",
+     "password": "securepassword"
+   }
+   ```
+   Returns: `{"access_token": "...", "token_type": "bearer"}`
+
+3. **Access services**: Include the token in Authorization header:
+   ```
+   Authorization: Bearer <access_token>
+   ```
+
+4. **Entitlement Management**: Users need proper entitlements to access services:
+   - Geniess requires: `BUNDLE_DRUID_GENIESS`
+   - Entity requires: `ENTITY`
+   - Contact administrator to grant entitlements or purchase via Stripe integration
 
 ### Development Mode Additional Ports
 
@@ -249,14 +318,17 @@ When running in development mode:
 
 ## 📦 Services Included
 
-| Service | Description | Port |
-|---------|-------------|------|
-| Nginx | Web server and reverse proxy | 80, 443 |
-| Apache Druid | Real-time analytics database | 8081-8083, 8888 |
-| PostgreSQL | Metadata storage for Druid | 5432 |
-| ZooKeeper | Coordination service | 2181 |
-| MongoDB | Application database | 27017 |
-| Redis | Caching layer | 6379 |
+| Service | Description | Port | Entitlement Required |
+|---------|-------------|------|---------------------|
+| Nginx | Web server and reverse proxy | 80, 443 | None |
+| Auth-Billing | Authentication and billing service | 8000 | None |
+| Geniess | AI platform for data intelligence | 8001 | BUNDLE_DRUID_GENIESS |
+| Entity | Unified AI application | 8002 | ENTITY |
+| Apache Druid | Real-time analytics database | 8081-8083, 8888 | BUNDLE_DRUID_GENIESS |
+| PostgreSQL | Metadata storage for Druid | 5432 | N/A |
+| ZooKeeper | Coordination service | 2181 | N/A |
+| MongoDB | Application database | 27017 | N/A |
+| Redis | Caching layer | 6379 | N/A |
 
 ## 🐳 Docker Management
 
