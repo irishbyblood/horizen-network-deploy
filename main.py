@@ -3,13 +3,13 @@ Horizen Network API Backend
 FastAPI application with CORS support for handling API requests
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -94,7 +94,7 @@ async def health_check():
     """
     return HealthResponse(
         status="healthy",
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         version="1.0.0",
         environment=os.getenv("ENVIRONMENT", "production")
     )
@@ -138,7 +138,7 @@ async def extract_text(request: TextExtractionRequest):
             metadata = {
                 "source_type": "text",
                 "length": len(extracted_text),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         elif request.source_type == "url":
             # URL extraction (placeholder - would need requests/beautifulsoup in production)
@@ -146,7 +146,7 @@ async def extract_text(request: TextExtractionRequest):
             metadata = {
                 "source_type": "url",
                 "source_url": request.source,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "note": "Full implementation requires web scraping libraries"
             }
         else:
@@ -167,27 +167,18 @@ async def extract_text(request: TextExtractionRequest):
         return TextExtractionResponse(
             success=False,
             error=str(e),
-            metadata={"timestamp": datetime.utcnow().isoformat()}
+            metadata={"timestamp": datetime.now(timezone.utc).isoformat()}
         )
 
 
 # Error handlers
-@app.exception_handler(404)
-async def not_found_handler(request, exc):
-    """Handle 404 errors"""
-    return JSONResponse(
-        status_code=404,
-        content={
-            "error": "Not Found",
-            "message": "The requested resource was not found",
-            "path": str(request.url)
-        }
-    )
-
-
-@app.exception_handler(500)
-async def internal_error_handler(request, exc):
-    """Handle 500 errors"""
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions"""
+    # Don't catch HTTPExceptions as they're already handled by FastAPI
+    if isinstance(exc, HTTPException):
+        raise exc
+    
     return JSONResponse(
         status_code=500,
         content={
