@@ -3,6 +3,7 @@ Horizen Network API Backend
 FastAPI application with CORS support for handling API requests
 """
 
+import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,6 +11,11 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os
 from datetime import datetime, timezone
+import uvicorn
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -165,7 +171,6 @@ async def extract_text(request: TextExtractionRequest):
         raise
     except Exception as e:
         # Log the error for debugging but don't expose details to client
-        import logging
         logging.error(f"Error during text extraction: {str(e)}")
         
         return TextExtractionResponse(
@@ -176,8 +181,6 @@ async def extract_text(request: TextExtractionRequest):
 
 
 # Error handlers
-from starlette.exceptions import HTTPException as StarletteHTTPException
-
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions"""
@@ -194,7 +197,6 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle general exceptions"""
     # Log the error for debugging
-    import logging
     logging.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     
     return JSONResponse(
@@ -207,8 +209,6 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
-    import uvicorn
-    
     # Run the application
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
