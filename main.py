@@ -164,20 +164,38 @@ async def extract_text(request: TextExtractionRequest):
     except HTTPException:
         raise
     except Exception as e:
+        # Log the error for debugging but don't expose details to client
+        import logging
+        logging.error(f"Error during text extraction: {str(e)}")
+        
         return TextExtractionResponse(
             success=False,
-            error=str(e),
+            error="An error occurred during text extraction",
             metadata={"timestamp": datetime.now(timezone.utc).isoformat()}
         )
 
 
 # Error handlers
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Handle HTTP exceptions"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.detail if hasattr(exc, 'detail') else "An error occurred",
+            "status_code": exc.status_code
+        }
+    )
+
+
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle general exceptions"""
-    # Don't catch HTTPExceptions as they're already handled by FastAPI
-    if isinstance(exc, HTTPException):
-        raise exc
+    # Log the error for debugging
+    import logging
+    logging.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     
     return JSONResponse(
         status_code=500,
