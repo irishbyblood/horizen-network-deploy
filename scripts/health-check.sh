@@ -3,7 +3,8 @@
 # Horizen Network Health Check Script
 # Verifies all services are running properly
 
-set -e
+# Note: Not using 'set -e' to allow the script to continue checking all services
+# even if some checks fail. We track errors and report them at the end.
 
 # Colors for output
 RED='\033[0;31m'
