@@ -1,7 +1,7 @@
 """
 Auth-Billing Service - Handles authentication, authorization, and billing integration.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 import os
 
@@ -42,7 +42,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory storage (replace with database in production)
+# In-memory storage (DEVELOPMENT ONLY - Replace with persistent database in production)
+# TODO: Replace with PostgreSQL or MongoDB for production deployment
+# These dictionaries should be replaced with proper database models and queries
 users_db = {}
 user_entitlements_db = {}
 
@@ -93,9 +95,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -161,7 +163,7 @@ async def register(user: UserCreate):
         "email": user.email,
         "hashed_password": hashed_password,
         "full_name": user.full_name,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
     }
     
     # Initialize empty entitlements
@@ -230,7 +232,13 @@ async def grant_entitlement(
     entitlement: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Grant an entitlement to a user (admin function - simplified for v1)."""
+    """
+    Grant an entitlement to a user (admin function).
+    
+    PRODUCTION NOTE: This endpoint should be protected with admin role verification.
+    Currently simplified for v1 - any authenticated user can grant entitlements.
+    TODO: Implement proper role-based access control (RBAC) before production deployment.
+    """
     if email not in users_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -252,7 +260,29 @@ async def grant_entitlement(
 async def stripe_webhook(webhook: dict):
     """
     Stripe webhook endpoint (phase 1 scaffolding).
-    In production, this should verify the webhook signature and process events.
+    
+    SECURITY WARNING: This endpoint currently lacks signature verification.
+    Before production deployment, implement the following:
+    
+    1. Verify webhook signature using STRIPE_WEBHOOK_SECRET:
+       ```python
+       import stripe
+       sig_header = request.headers.get('Stripe-Signature')
+       event = stripe.Webhook.construct_event(
+           payload, sig_header, STRIPE_WEBHOOK_SECRET
+       )
+       ```
+    
+    2. Handle specific event types:
+       - checkout.session.completed: Grant entitlements
+       - customer.subscription.deleted: Revoke entitlements
+       - invoice.payment_failed: Handle failed payments
+    
+    3. Map Stripe product IDs to entitlements
+    4. Implement idempotency to prevent duplicate processing
+    5. Add comprehensive logging for audit trail
+    
+    TODO: Complete implementation before enabling payments
     """
     # TODO: Verify webhook signature using STRIPE_WEBHOOK_SECRET
     # For now, this is a placeholder
