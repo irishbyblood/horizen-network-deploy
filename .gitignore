@@ -80,3 +80,9 @@ Thumbs.db
 # Secrets and credentials
 secrets/
 credentials/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
