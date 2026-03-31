@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: druid-config
+  namespace: horizen-network
+  labels:
+    app: druid
+data:
+  # Common Druid runtime properties
+  common.runtime.properties: |
+    # Zookeeper
+    druid.zk.service.host=zookeeper:2181
+    druid.zk.paths.base=/druid
+    
+    # Metadata storage
+    druid.metadata.storage.type=postgresql
+    druid.metadata.storage.connector.connectURI=jdbc:postgresql://postgres:5432/druid_metadata
+    druid.metadata.storage.connector.user=druid
+    
+    # Deep storage (local for development, use S3/GCS for production)
+    druid.storage.type=local
+    druid.storage.storageDirectory=/opt/druid/var/druid/segments
+    
+    # Indexing service logs
+    druid.indexer.logs.type=file
+    druid.indexer.logs.directory=/opt/druid/var/druid/indexing-logs
+    
+    # Service discovery
+    druid.selectors.indexing.serviceName=druid/overlord
+    druid.selectors.coordinator.serviceName=druid/coordinator
+    
+    # Processing
+    druid.processing.buffer.sizeBytes=536870912
+    druid.processing.numThreads=2
+    druid.processing.numMergeBuffers=2
+    
+    # Query
+    druid.server.http.numThreads=40
+    druid.sql.enable=true
+    
+    # Extensions
+    druid.extensions.loadList=["druid-kafka-indexing-service", "druid-datasketches", "postgresql-metadata-storage"]
