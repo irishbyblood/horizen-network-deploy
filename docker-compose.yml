@@ -16,6 +16,9 @@ services:
       - nginx-logs:/var/log/nginx
     depends_on:
       - druid-router
+      - auth-billing
+      - geniess
+      - entity
     networks:
       - horizen-network
     restart: unless-stopped
@@ -176,6 +179,70 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Auth-Billing Service
+  auth-billing:
+    build:
+      context: ./auth-billing
+      dockerfile: Dockerfile
+    container_name: horizen-auth-billing
+    environment:
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-changeme_jwt_secret_key_please}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - STRIPE_API_KEY=${STRIPE_API_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - PORT=8000
+    networks:
+      - horizen-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Geniess Service
+  geniess:
+    build:
+      context: ./geniess
+      dockerfile: Dockerfile
+    container_name: horizen-geniess
+    environment:
+      - AUTH_BILLING_URL=http://auth-billing:8000
+      - PORT=8001
+    depends_on:
+      - auth-billing
+    networks:
+      - horizen-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Entity Service
+  entity:
+    build:
+      context: ./entity
+      dockerfile: Dockerfile
+    container_name: horizen-entity
+    environment:
+      - AUTH_BILLING_URL=http://auth-billing:8000
+      - PORT=8002
+    depends_on:
+      - auth-billing
+    networks:
+      - horizen-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   horizen-network:
