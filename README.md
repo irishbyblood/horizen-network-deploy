@@ -273,9 +273,9 @@ All services (except the main website) require authentication:
 1. **Register an account**: `POST http://api.horizen-network.com/api/auth/register`
    ```json
    {
-     "email": "user@example.com",
-     "password": "securepassword",
-     "full_name": "User Name"
+     "email": "user@irishbyblood@Horizen-Network.con",
+     "password": "Ireland369@",
+     "full_name": "Jeremiah Shon O'Neil"
    }
    ```
 
