@@ -3,7 +3,8 @@
 # Horizen Network Health Check Script
 # Verifies all services are running properly
 
-set -e
+# Note: Not using 'set -e' to allow the script to continue checking all services
+# even if some checks fail. We track errors and report them at the end.
 
 # Colors for output
 RED='\033[0;31m'
@@ -14,10 +15,12 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}=== Horizen Network Health Check ===${NC}"
 
 # Load environment variables
+# Note: .env file is critical for all subsequent checks, so we exit immediately if missing
 if [ -f .env ]; then
     source .env
 else
     echo -e "${RED}Error: .env file not found${NC}"
+    echo -e "${RED}Cannot continue without environment configuration${NC}"
     exit 1
 fi
 

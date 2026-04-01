@@ -226,8 +226,11 @@ Verifies all services are running and healthy.
 After deployment, access your services at:
 
 - **Main Website**: `http://horizen-network.com`
-- **Druid Console**: `http://druid.horizen-network.com` or `http://horizen-network.com/druid`
+- **Druid Console (UI)**: `http://druid.horizen-network.com` or `http://horizen-network.com/druid`
+- **Druid Broker API**: `http://horizen-network.com/druid-api/`
 - **Geniess**: `http://geniess.horizen-network.com`
+
+**Note**: The `/api/` path on the main domain is reserved for the future auth-billing API.
 
 ### Development Mode Additional Ports
 
@@ -235,6 +238,7 @@ When running in development mode:
 - Druid Router: `http://localhost:8888`
 - Druid Coordinator: `http://localhost:8081`
 - Druid Broker: `http://localhost:8082`
+- Druid Broker API: `http://localhost/druid-api/` (via Nginx)
 - PostgreSQL: `localhost:5432`
 - MongoDB: `localhost:27017`
 - Redis: `localhost:6379`
