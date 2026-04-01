@@ -1,0 +1,103 @@
+# DNS Records for horizen-network.com
+# Configure these records in your DNS provider
+
+# Main Domain - Points to your server IP
+# Replace YOUR_SERVER_IP with your actual server IP address
+Type: A
+Name: @
+Value: YOUR_SERVER_IP
+TTL: 3600
+
+# WWW Subdomain - Alias to main domain (RECOMMENDED)
+# This ensures www.horizen-network.com resolves correctly
+Type: CNAME
+Name: www
+Value: horizen-network.com
+TTL: 3600
+
+# Alternative: WWW as A Record (if CNAME not supported)
+# Type: A
+# Name: www
+# Value: YOUR_SERVER_IP
+# TTL: 3600
+
+# Druid Analytics Subdomain
+Type: A
+Name: druid
+Value: YOUR_SERVER_IP
+TTL: 3600
+
+# Geniess Intelligence Subdomain
+Type: A
+Name: geniess
+Value: YOUR_SERVER_IP
+TTL: 3600
+
+# Entity AI Subdomain
+Type: A
+Name: entity
+Value: YOUR_SERVER_IP
+TTL: 3600
+
+# Optional: IPv6 Support (if available)
+# Type: AAAA
+# Name: @
+# Value: YOUR_IPV6_ADDRESS
+# TTL: 3600
+
+# Type: AAAA
+# Name: www
+# Value: YOUR_IPV6_ADDRESS
+# TTL: 3600
+
+# Type: AAAA
+# Name: druid
+# Value: YOUR_IPV6_ADDRESS
+# TTL: 3600
+
+# Type: AAAA
+# Name: geniess
+# Value: YOUR_IPV6_ADDRESS
+# TTL: 3600
+
+# Type: AAAA
+# Name: entity
+# Value: YOUR_IPV6_ADDRESS
+# TTL: 3600
+
+# ============================================
+# Quick Reference Table
+# ============================================
+# Type    Name      Value                    TTL    Priority
+# ----    ----      -----                    ---    --------
+# A       @         YOUR_SERVER_IP           3600   REQUIRED
+# CNAME   www       horizen-network.com      3600   REQUIRED
+# A       druid     YOUR_SERVER_IP           3600   REQUIRED
+# A       geniess   YOUR_SERVER_IP           3600   REQUIRED
+# A       entity    YOUR_SERVER_IP           3600   REQUIRED
+# AAAA    @         YOUR_IPV6_ADDRESS        3600   OPTIONAL
+# AAAA    www       YOUR_IPV6_ADDRESS        3600   OPTIONAL
+
+# ============================================
+# Important Notes
+# ============================================
+# 1. The www CNAME record is REQUIRED for www.horizen-network.com to work
+# 2. Replace YOUR_SERVER_IP with your actual server IP (e.g., 203.0.113.10)
+# 3. DNS propagation can take 5 minutes to 48 hours
+# 4. Verify with: dig horizen-network.com +short
+# 5. Verify www with: dig www.horizen-network.com +short
+# 6. TTL is in seconds (3600 = 1 hour)
+# 7. Lower TTL before changes, raise after stable
+
+# ============================================
+# Verification Commands
+# ============================================
+# dig horizen-network.com A +short
+# dig www.horizen-network.com CNAME +short
+# dig druid.horizen-network.com A +short
+# dig geniess.horizen-network.com A +short
+# dig entity.horizen-network.com A +short
+# nslookup www.horizen-network.com
+# host www.horizen-network.com
+
+# For more details, see: docs/DNS_CONFIGURATION.md
