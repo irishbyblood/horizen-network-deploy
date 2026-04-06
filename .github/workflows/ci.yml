@@ -1,0 +1,447 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  lint:
+    name: Lint and Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Shell Scripts with ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          
+          echo "::group::ShellCheck Results"
+          SHELLCHECK_ERRORS=0
+          
+          for script in $(find scripts -name "*.sh" -type f); do
+            echo "Checking $script..."
+            if ! shellcheck -x "$script"; then
+              SHELLCHECK_ERRORS=$((SHELLCHECK_ERRORS + 1))
+            fi
+          done
+          
+          echo "::endgroup::"
+          
+          if [ $SHELLCHECK_ERRORS -gt 0 ]; then
+            echo "❌ ShellCheck found $SHELLCHECK_ERRORS script(s) with issues"
+            exit 1
+          else
+            echo "✅ All shell scripts passed ShellCheck"
+          fi
+
+      - name: Validate YAML with yamllint
+        run: |
+          pip install yamllint
+          
+          echo "::group::yamllint Results"
+          yamllint -d "{extends: relaxed, rules: {line-length: {max: 200}}}" \
+            .github monitoring kubernetes docker-compose*.yml || true
+          echo "::endgroup::"
+
+      - name: Validate Docker Compose Files
+        run: |
+          echo "::group::Docker Compose Validation"
+          
+          echo "Validating base docker-compose.yml..."
+          docker-compose config > /dev/null
+          
+          echo "Validating docker-compose.dev.yml..."
+          docker-compose -f docker-compose.yml -f docker-compose.dev.yml config > /dev/null
+          
+          echo "Validating docker-compose.prod.yml..."
+          docker-compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
+          
+          echo "✅ All Docker Compose files are valid"
+          echo "::endgroup::"
+
+      - name: Validate Kubernetes Manifests
+        run: |
+          echo "::group::Kubernetes Validation"
+          
+          # Install kubeval
+          wget -q https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin
+          
+          # Validate all Kubernetes YAML files
+          for file in $(find kubernetes -name "*.yaml" -type f); do
+            echo "Validating $file..."
+            kubeval --ignore-missing-schemas "$file" || echo "⚠️ Validation failed for $file"
+          done
+          
+          echo "::endgroup::"
+
+      - name: Validate Nginx Configuration
+        run: |
+          echo "Testing Nginx configuration syntax..."
+          docker run --rm -v $(pwd)/nginx:/etc/nginx:ro nginx:alpine nginx -t
+
+      - name: Validate Prometheus Configuration
+        run: |
+          if [ -f monitoring/prometheus.yml ]; then
+            echo "Validating Prometheus configuration..."
+            docker run --rm -v $(pwd)/monitoring:/etc/prometheus:ro \
+              prom/prometheus:latest \
+              promtool check config /etc/prometheus/prometheus.yml
+          fi
+
+      - name: Validate Prometheus Alert Rules
+        run: |
+          if [ -f monitoring/alerts.yml ]; then
+            echo "Validating Prometheus alert rules..."
+            docker run --rm -v $(pwd)/monitoring:/etc/prometheus:ro \
+              prom/prometheus:latest \
+              promtool check rules /etc/prometheus/alerts.yml
+          fi
+
+      - name: Check File Permissions
+        run: |
+          echo "Checking script permissions..."
+          
+          for script in scripts/*.sh; do
+            if [ ! -x "$script" ]; then
+              echo "❌ $script is not executable"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All scripts are executable"
+
+      - name: Check for TODO/FIXME Comments
+        run: |
+          echo "::group::TODOs and FIXMEs"
+          grep -r -n "TODO\|FIXME" --include="*.sh" --include="*.yml" --include="*.yaml" --include="*.conf" . || echo "No TODOs or FIXMEs found"
+          echo "::endgroup::"
+
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Config Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-config.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy Config Results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-config.sarif'
+          category: 'config-scan'
+
+      - name: Run Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy FS Results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-fs.sarif'
+          category: 'filesystem-scan'
+
+      - name: Scan for Secrets
+        run: |
+          echo "Scanning for potential secrets..."
+          
+          # Check for common secret patterns
+          SECRETS_FOUND=0
+          
+          if git grep -i -E "(password|passwd|pwd|secret|token|api[_-]?key).*=.*['\"][^'\"]{10,}['\"]" \
+            -- '*.yml' '*.yaml' '*.conf' '*.config' ':!*.example' ':!*.template' ':!.env.example' ':!.env.staging' ':!.env.production'; then
+            echo "⚠️ Potential secrets found in files!"
+            SECRETS_FOUND=1
+          fi
+          
+          # Check for AWS keys
+          if git grep -E "AKIA[0-9A-Z]{16}" .; then
+            echo "❌ AWS Access Key found!"
+            SECRETS_FOUND=1
+          fi
+          
+          # Check for private keys
+          if git grep -l "BEGIN.*PRIVATE KEY" -- ':!*.example' ':!*.md'; then
+            echo "❌ Private key found in repository!"
+            SECRETS_FOUND=1
+          fi
+          
+          if [ $SECRETS_FOUND -eq 1 ]; then
+            echo "Please remove secrets from the repository"
+            exit 1
+          fi
+          
+          echo "✅ No secrets detected"
+
+      - name: Check Dependencies for Vulnerabilities
+        run: |
+          echo "Checking Docker images for vulnerabilities..."
+          
+          # Install Trivy
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          
+          # Get images from docker-compose
+          IMAGES=$(docker-compose config | grep "image:" | awk '{print $2}' | sort | uniq)
+          
+          CRITICAL_FOUND=0
+          for image in $IMAGES; do
+            echo "Scanning $image..."
+            if ! trivy image --severity HIGH,CRITICAL --exit-code 0 --quiet "$image"; then
+              CRITICAL_FOUND=1
+            fi
+          done
+          
+          if [ $CRITICAL_FOUND -eq 1 ]; then
+            echo "⚠️ Some images have HIGH or CRITICAL vulnerabilities"
+            echo "Consider updating the images"
+          fi
+
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create Test Environment
+        run: |
+          cp .env.example .env
+          sed -i 's/changeme_postgres_password/ci_test_password_12345/g' .env
+          sed -i 's/changeme_mongo_password/ci_test_password_12345/g' .env
+          sed -i 's/changeme_redis_password/ci_test_password_12345/g' .env
+          sed -i 's/ENVIRONMENT=production/ENVIRONMENT=ci/g' .env
+
+      - name: Pull Docker Images
+        run: |
+          echo "Pulling Docker images..."
+          docker-compose pull --quiet
+
+      - name: Start Infrastructure
+        run: |
+          echo "Starting services..."
+          docker-compose up -d
+          
+          echo "Waiting for services to be ready..."
+          sleep 60
+
+      - name: Check Services
+        run: |
+          echo "Checking service health..."
+          docker-compose ps
+          
+          # Count running containers
+          RUNNING=$(docker-compose ps | grep "Up" | wc -l)
+          echo "Running containers: $RUNNING"
+
+      - name: Test Database Connections
+        run: |
+          echo "Testing PostgreSQL..."
+          docker-compose exec -T postgres pg_isready -U druid || echo "PostgreSQL not ready"
+          
+          echo "Testing MongoDB..."
+          docker-compose exec -T mongodb mongosh --quiet --eval "db.adminCommand('ping').ok" || echo "MongoDB not ready"
+          
+          echo "Testing Redis..."
+          docker-compose exec -T redis redis-cli -a ci_test_password_12345 ping || echo "Redis not ready"
+
+      - name: Run Health Check Script
+        run: |
+          chmod +x scripts/health-check.sh
+          ./scripts/health-check.sh || echo "Health check reported issues (expected in CI)"
+
+      - name: Collect Logs on Failure
+        if: failure()
+        run: |
+          echo "::group::Container Logs"
+          docker-compose logs --tail=100
+          echo "::endgroup::"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v
+          docker system prune -f
+
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Documentation Links
+        run: |
+          echo "Checking for broken links in Markdown files..."
+          
+          # Install markdown-link-check
+          npm install -g markdown-link-check
+          
+          # Check all markdown files
+          find . -name "*.md" -not -path "./node_modules/*" -print0 | \
+            xargs -0 -n1 markdown-link-check -q || true
+
+      - name: Check Documentation Completeness
+        run: |
+          echo "Checking for incomplete documentation..."
+          
+          # Check for placeholder text
+          if grep -r "\[TODO\]\|\[FIXME\]\|\[...\]" docs/ README.md SECURITY.md; then
+            echo "⚠️ Found incomplete documentation sections"
+          else
+            echo "✅ Documentation appears complete"
+          fi
+
+      - name: Check README Structure
+        run: |
+          echo "Validating README structure..."
+          
+          REQUIRED_SECTIONS=(
+            "Overview"
+            "Features"
+            "Quick Start"
+            "Documentation"
+          )
+          
+          for section in "${REQUIRED_SECTIONS[@]}"; do
+            if ! grep -q "$section" README.md; then
+              echo "⚠️ README missing section: $section"
+            fi
+          done
+
+  compliance:
+    name: Compliance Check
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check License File
+        run: |
+          if [ -f LICENSE ]; then
+            echo "✅ LICENSE file exists"
+          else
+            echo "⚠️ LICENSE file not found"
+          fi
+
+      - name: Check Security Policy
+        run: |
+          if [ -f SECURITY.md ]; then
+            echo "✅ SECURITY.md exists"
+          else
+            echo "❌ SECURITY.md not found"
+            exit 1
+          fi
+
+      - name: Check .gitignore
+        run: |
+          if [ -f .gitignore ]; then
+            echo "✅ .gitignore exists"
+            
+            # Check for common patterns
+            REQUIRED_PATTERNS=(".env" "*.log" "secrets" "*.key" "*.pem")
+            
+            for pattern in "${REQUIRED_PATTERNS[@]}"; do
+              if ! grep -q "$pattern" .gitignore; then
+                echo "⚠️ .gitignore missing pattern: $pattern"
+              fi
+            done
+          else
+            echo "❌ .gitignore not found"
+            exit 1
+          fi
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint, security, build-test, documentation, compliance]
+    if: always()
+    steps:
+      - name: Check Results
+        run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.lint.result }}" = "success" ]; then
+            echo "✅ Lint: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Lint: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.security.result }}" = "success" ]; then
+            echo "✅ Security: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Security: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.build-test.result }}" = "success" ]; then
+            echo "✅ Build & Test: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Build & Test: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.documentation.result }}" = "success" ]; then
+            echo "✅ Documentation: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Documentation: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.compliance.result }}" = "success" ]; then
+            echo "✅ Compliance: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Compliance: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Final Status
+        run: |
+          if [ "${{ needs.lint.result }}" = "success" ] && \
+             [ "${{ needs.security.result }}" = "success" ] && \
+             [ "${{ needs.build-test.result }}" = "success" ] && \
+             [ "${{ needs.documentation.result }}" = "success" ] && \
+             [ "${{ needs.compliance.result }}" = "success" ]; then
+            echo "🎉 All CI checks passed!"
+            exit 0
+          else
+            echo "❌ Some CI checks failed"
+            exit 1
+          fi

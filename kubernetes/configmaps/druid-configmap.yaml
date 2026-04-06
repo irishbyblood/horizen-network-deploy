@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: druid-config
+  namespace: horizen-network
+  labels:
+    app: druid
+data:
+  # Common Druid configuration
+  common.runtime.properties: |
+    # Extensions
+    druid.extensions.loadList=["druid-kafka-indexing-service", "druid-s3-extensions", "postgresql-metadata-storage", "druid-basic-security"]
+    
+    # Zookeeper
+    druid.zk.service.host=zookeeper:2181
+    druid.zk.paths.base=/druid
+    
+    # Metadata storage
+    druid.metadata.storage.type=postgresql
+    druid.metadata.storage.connector.connectURI=jdbc:postgresql://postgres:5432/druid_metadata
+    druid.metadata.storage.connector.user=druid
+    
+    # Deep storage
+    druid.storage.type=local
+    druid.storage.storageDirectory=/opt/druid/var/druid/segments
+    
+    # Indexing service logs
+    druid.indexer.logs.type=file
+    druid.indexer.logs.directory=/opt/druid/var/druid/indexing-logs
+    
+    # Service discovery
+    druid.selectors.indexing.serviceName=druid/overlord
+    druid.selectors.coordinator.serviceName=druid/coordinator
+    
+    # Monitoring
+    druid.monitoring.monitors=["org.apache.druid.java.util.metrics.JvmMonitor"]
+    druid.emitter=logging
+    druid.emitter.logging.logLevel=info
+    
+    # SQL
+    druid.sql.enable=true
+    
+  # JVM configuration
+  jvm.config: |
+    -server
+    -Xms4g
+    -Xmx4g
+    -XX:+UseG1GC
+    -XX:MaxGCPauseMillis=100
+    -XX:+UseStringDeduplication
+    -XX:+ParallelRefProcEnabled
+    -XX:MaxDirectMemorySize=4g
+    -Duser.timezone=UTC
+    -Dfile.encoding=UTF-8
+    -Djava.io.tmpdir=/tmp
+    -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager
+    
+  # Log4j2 configuration
+  log4j2.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <Configuration status="WARN">
+      <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+          <PatternLayout pattern="%d{ISO8601} %p [%t] %c - %m%n"/>
+        </Console>
+      </Appenders>
+      <Loggers>
+        <Root level="info">
+          <AppenderRef ref="Console"/>
+        </Root>
+        <Logger name="org.apache.druid" level="info"/>
+        <Logger name="org.apache.druid.jetty.RequestLog" level="info" additivity="false">
+          <AppenderRef ref="Console"/>
+        </Logger>
+      </Loggers>
+    </Configuration>
+    
+  # Coordinator specific config
+  coordinator.runtime.properties: |
+    druid.service=druid/coordinator
+    druid.plaintextPort=8081
+    
+    # HTTP server threads
+    druid.server.http.numThreads=25
+    
+    # Coordinator
+    druid.coordinator.startDelay=PT30S
+    druid.coordinator.period=PT30S
+    druid.coordinator.asOverlord.enabled=true
+    druid.coordinator.asOverlord.overlordService=druid/overlord
+    
+  # Broker specific config
+  broker.runtime.properties: |
+    druid.service=druid/broker
+    druid.plaintextPort=8082
+    
+    # HTTP server threads
+    druid.server.http.numThreads=25
+    
+    # Processing
+    druid.processing.buffer.sizeBytes=536870912
+    druid.processing.numThreads=2
+    
+    # Query cache
+    druid.broker.cache.useCache=true
+    druid.broker.cache.populateCache=true
+    druid.cache.type=caffeine
+    druid.cache.sizeInBytes=1073741824
+    
+  # Historical specific config
+  historical.runtime.properties: |
+    druid.service=druid/historical
+    druid.plaintextPort=8083
+    
+    # HTTP server threads
+    druid.server.http.numThreads=25
+    
+    # Processing
+    druid.processing.buffer.sizeBytes=536870912
+    druid.processing.numThreads=2
+    druid.processing.numMergeBuffers=2
+    
+    # Segment cache
+    druid.segmentCache.locations=[{"path":"/opt/druid/var/druid/segment-cache","maxSize":10737418240}]
+    druid.server.maxSize=10737418240
+    
+  # MiddleManager specific config
+  middlemanager.runtime.properties: |
+    druid.service=druid/middleManager
+    druid.plaintextPort=8091
+    
+    # Number of tasks per middleManager
+    druid.worker.capacity=3
+    
+    # Task launch parameters
+    druid.indexer.runner.javaOpts=-server -Xmx2g -Xms2g -XX:MaxDirectMemorySize=2g
+    druid.indexer.task.baseTaskDir=/opt/druid/var/druid/task
+    
+    # HTTP server threads
+    druid.server.http.numThreads=25
+    
+    # Processing threads
+    druid.processing.buffer.sizeBytes=268435456
+    druid.processing.numThreads=2
+    
+  # Router specific config
+  router.runtime.properties: |
+    druid.service=druid/router
+    druid.plaintextPort=8888
+    
+    # HTTP server threads
+    druid.server.http.numThreads=25
+    
+    # Service provider
+    druid.router.defaultBrokerServiceName=druid/broker
+    druid.router.coordinatorServiceName=druid/coordinator
+    druid.router.managementProxy.enabled=true
