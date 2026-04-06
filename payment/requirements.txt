@@ -1,0 +1,14 @@
+# Horizen Network Payment Service Dependencies
+
+# Stripe SDK
+stripe==7.8.0
+
+# Flask for webhook server
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Database
+psycopg2-binary==2.9.9
+
+# Utilities
+python-dotenv==1.0.0

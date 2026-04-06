@@ -1,0 +1,489 @@
+# Prometheus Alert Rules for Horizen Network
+# Complete alert coverage for production monitoring
+
+groups:
+  # Service Availability Alerts
+  - name: service_availability
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 2 minutes."
+
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Nginx web server is down"
+          description: "Nginx has been unreachable for more than 1 minute. All web traffic is affected."
+
+      - alert: PostgresDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL has been down for more than 2 minutes. Druid metadata storage is unavailable."
+
+      - alert: DruidCoordinatorDown
+        expr: up{job="druid-coordinator"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Druid Coordinator is down"
+          description: "Druid Coordinator has been down for more than 3 minutes. Data management is affected."
+
+      - alert: DruidBrokerDown
+        expr: up{job="druid-broker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Druid Broker is down"
+          description: "Druid Broker has been down for more than 2 minutes. Query routing is unavailable."
+
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "MongoDB is down"
+          description: "MongoDB has been down for more than 2 minutes. Application data is unavailable."
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: availability
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis has been down for more than 2 minutes. Caching is unavailable."
+
+  # Resource Usage Alerts - CPU
+  - name: cpu_usage
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 5 minutes. Current: {{ $value | humanize }}%"
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 3m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 95% for more than 3 minutes. Current: {{ $value | humanize }}%"
+
+      - alert: ContainerHighCPU
+        expr: sum(rate(container_cpu_usage_seconds_total{container!=""}[5m])) by (container) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Container {{ $labels.container }} has high CPU usage"
+          description: "Container CPU usage is above 80%. Current: {{ $value | humanize }}%"
+
+  # Resource Usage Alerts - Memory
+  - name: memory_usage
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 80% for more than 5 minutes. Current: {{ $value | humanize }}%"
+
+      - alert: CriticalMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 95%. Current: {{ $value | humanize }}%. System may become unstable."
+
+      - alert: ContainerHighMemory
+        expr: sum(container_memory_usage_bytes{container!=""}) by (container) / sum(container_spec_memory_limit_bytes{container!=""}) by (container) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Container {{ $labels.container }} has high memory usage"
+          description: "Container memory usage is above 80%. Current: {{ $value | humanize }}%"
+
+      - alert: ContainerOOMKilled
+        expr: increase(container_oom_events_total[5m]) > 0
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Container {{ $labels.container }} was OOM killed"
+          description: "Container ran out of memory and was killed by the OOM killer."
+
+  # Resource Usage Alerts - Disk
+  - name: disk_usage
+    interval: 60s
+    rules:
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} - node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}) / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.mountpoint }} is above 80%. Current: {{ $value | humanize }}%"
+
+      - alert: CriticalDiskUsage
+        expr: (node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} - node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}) / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical disk usage on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.mountpoint }} is above 90%. Current: {{ $value | humanize }}%. Immediate action required."
+
+      - alert: DiskWillFillIn4Hours
+        expr: predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}[1h], 4*3600) < 0
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Disk will fill in 4 hours on {{ $labels.instance }}"
+          description: "Based on current usage, disk {{ $labels.mountpoint }} will be full in approximately 4 hours."
+
+      - alert: HighInodeUsage
+        expr: node_filesystem_files_free{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} / node_filesystem_files{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} * 100 < 20
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High inode usage on {{ $labels.instance }}"
+          description: "Less than 20% inodes available on {{ $labels.mountpoint }}. Current: {{ $value | humanize }}%"
+
+  # Database Health Alerts
+  - name: database_health
+    interval: 30s
+    rules:
+      - alert: PostgresConnectionsHigh
+        expr: sum(pg_stat_activity_count) / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "PostgreSQL has high number of connections"
+          description: "PostgreSQL connections are above 80% of max_connections. Current: {{ $value | humanize }}%"
+
+      - alert: PostgresReplicationLag
+        expr: pg_replication_lag > 60
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "PostgreSQL replication lag is high"
+          description: "Replication lag is more than 60 seconds. Current: {{ $value | humanize }}s"
+
+      - alert: PostgresDeadlocks
+        expr: rate(pg_stat_database_deadlocks[5m]) > 0
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: "Database deadlocks detected at rate: {{ $value | humanize }} per second"
+
+      - alert: MongoDBReplicationLag
+        expr: mongodb_replset_member_replication_lag > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "MongoDB replication lag detected"
+          description: "MongoDB replica is lagging by {{ $value | humanize }} seconds"
+
+      - alert: MongoDBConnectionsHigh
+        expr: mongodb_connections{state="current"} > 500
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "MongoDB has high number of connections"
+          description: "MongoDB has more than 500 active connections. Current: {{ $value | humanize }}"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is above 90%. Current: {{ $value | humanize }}%"
+
+      - alert: RedisRejectedConnections
+        expr: increase(redis_rejected_connections_total[5m]) > 0
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Redis is rejecting connections"
+          description: "Redis has rejected {{ $value | humanize }} connections in the last 5 minutes"
+
+  # Druid Cluster Health Alerts
+  - name: druid_health
+    interval: 60s
+    rules:
+      - alert: DruidSegmentLoadFailure
+        expr: rate(druid_coordinator_segment_loadQueue[5m]) > 10
+        for: 10m
+        labels:
+          severity: warning
+          category: druid
+        annotations:
+          summary: "Druid segment load queue is growing"
+          description: "Druid has segments waiting to be loaded. Rate: {{ $value | humanize }} per second"
+
+      - alert: DruidQueryLatencyHigh
+        expr: histogram_quantile(0.95, rate(druid_query_time_bucket[5m])) > 5000
+        for: 5m
+        labels:
+          severity: warning
+          category: druid
+        annotations:
+          summary: "Druid query latency is high"
+          description: "95th percentile query latency is above 5 seconds. Current: {{ $value | humanize }}ms"
+
+      - alert: DruidQueryFailureRateHigh
+        expr: rate(druid_query_failed[5m]) / rate(druid_query_count[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: druid
+        annotations:
+          summary: "Druid query failure rate is high"
+          description: "More than 5% of queries are failing. Current rate: {{ $value | humanize }}%"
+
+      - alert: DruidIngestionTasksFailing
+        expr: increase(druid_ingestion_failed[10m]) > 3
+        labels:
+          severity: warning
+          category: druid
+        annotations:
+          summary: "Druid ingestion tasks are failing"
+          description: "{{ $value | humanize }} ingestion tasks have failed in the last 10 minutes"
+
+      - alert: DruidHistoricalNodesDown
+        expr: druid_historical_count < 1
+        for: 5m
+        labels:
+          severity: critical
+          category: druid
+        annotations:
+          summary: "No Druid Historical nodes available"
+          description: "All Druid Historical nodes are down. Historical queries will fail."
+
+  # SSL Certificate Alerts
+  - name: ssl_certificates
+    interval: 3600s
+    rules:
+      - alert: SSLCertificateExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "SSL certificate expiring soon for {{ $labels.instance }}"
+          description: "SSL certificate will expire in {{ $value | humanize }} days. Renewal required."
+
+      - alert: SSLCertificateExpiresCritical
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 7
+        for: 1h
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "SSL certificate expires in less than 7 days for {{ $labels.instance }}"
+          description: "SSL certificate will expire in {{ $value | humanize }} days. Immediate renewal required!"
+
+      - alert: SSLCertificateInvalid
+        expr: probe_ssl_earliest_cert_expiry == 0
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "SSL certificate is invalid for {{ $labels.instance }}"
+          description: "SSL certificate validation failed. Check certificate configuration."
+
+  # Backup Alerts
+  - name: backup_health
+    interval: 3600s
+    rules:
+      - alert: BackupFailed
+        expr: time() - backup_last_success_timestamp_seconds > 86400
+        for: 1h
+        labels:
+          severity: critical
+          category: backup
+        annotations:
+          summary: "Backup has not completed successfully in 24 hours"
+          description: "Last successful backup was {{ $value | humanize }} seconds ago. Check backup system."
+
+      - alert: BackupMissing
+        expr: absent(backup_last_success_timestamp_seconds)
+        for: 2h
+        labels:
+          severity: warning
+          category: backup
+        annotations:
+          summary: "Backup metrics are missing"
+          description: "No backup metrics available. Backup system may not be running."
+
+      - alert: BackupSizeTooLarge
+        expr: backup_size_bytes > 50e9
+        labels:
+          severity: warning
+          category: backup
+        annotations:
+          summary: "Backup size is unusually large"
+          description: "Backup size is {{ $value | humanizeBytes }}. Verify backup contents."
+
+      - alert: BackupDurationTooLong
+        expr: backup_duration_seconds > 3600
+        labels:
+          severity: warning
+          category: backup
+        annotations:
+          summary: "Backup is taking too long"
+          description: "Backup took {{ $value | humanize }} seconds to complete. Expected less than 1 hour."
+
+  # Network and Connectivity Alerts
+  - name: network_health
+    interval: 30s
+    rules:
+      - alert: HighNetworkErrorRate
+        expr: rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: network
+        annotations:
+          summary: "High network error rate on {{ $labels.instance }}"
+          description: "Network interface {{ $labels.device }} has high error rate: {{ $value | humanize }} errors/sec"
+
+      - alert: HighNetworkDropRate
+        expr: rate(node_network_receive_drop_total[5m]) + rate(node_network_transmit_drop_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: network
+        annotations:
+          summary: "High network drop rate on {{ $labels.instance }}"
+          description: "Network interface {{ $labels.device }} is dropping packets at {{ $value | humanize }} packets/sec"
+
+  # Application Performance Alerts
+  - name: application_performance
+    interval: 30s
+    rules:
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High request latency detected"
+          description: "95th percentile request latency is {{ $value | humanize }}s. Target is under 1 second."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "Error rate is {{ $value | humanize }}%. More than 5% of requests are failing."
+
+      - alert: TooManyRestarts
+        expr: increase(container_start_time_seconds[10m]) > 3
+        labels:
+          severity: warning
+          category: stability
+        annotations:
+          summary: "Container {{ $labels.container }} is restarting frequently"
+          description: "Container has restarted {{ $value | humanize }} times in the last 10 minutes"
+
+  # System Health Alerts
+  - name: system_health
+    interval: 60s
+    rules:
+      - alert: SystemLoadHigh
+        expr: node_load5 / count without (cpu, mode) (node_cpu_seconds_total{mode="idle"}) > 2
+        for: 10m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High system load on {{ $labels.instance }}"
+          description: "System load average is {{ $value | humanize }}. System may be overloaded."
+
+      - alert: ClockSkewDetected
+        expr: abs(node_timex_offset_seconds) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Clock skew detected on {{ $labels.instance }}"
+          description: "System clock is off by {{ $value | humanize }} seconds. NTP synchronization may be failing."
+
+      - alert: SystemTimeOutOfSync
+        expr: abs(node_timex_offset_seconds) > 1
+        for: 2m
+        labels:
+          severity: critical
+          category: system
+        annotations:
+          summary: "System time is significantly out of sync on {{ $labels.instance }}"
+          description: "System clock is off by {{ $value | humanize }} seconds. Critical for distributed systems."

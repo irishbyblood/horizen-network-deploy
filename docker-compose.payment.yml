@@ -1,0 +1,50 @@
+# Docker Compose configuration for Horizen Network Payment Service
+version: '3.8'
+
+services:
+  payment-webhooks:
+    build:
+      context: ./payment
+      dockerfile: Dockerfile
+    container_name: horizen-payment-webhooks
+    restart: unless-stopped
+    environment:
+      # Stripe Configuration
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_DRUID_GENIESS_PRICE_ID: ${STRIPE_DRUID_GENIESS_PRICE_ID:-price_druid_geniess_monthly}
+      STRIPE_ENTITY_PRICE_ID: ${STRIPE_ENTITY_PRICE_ID:-price_entity_monthly}
+      
+      # Database Configuration
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-horizen_network}
+      POSTGRES_USER: ${POSTGRES_USER:-druid}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      
+      # Flask Configuration
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-false}
+      WEBHOOK_HOST: 0.0.0.0
+      WEBHOOK_PORT: 5000
+    ports:
+      - "5000:5000"
+    networks:
+      - horizen-network
+    depends_on:
+      - postgres
+    volumes:
+      - payment-logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  payment-logs:
+    name: horizen-payment-logs
+
+networks:
+  horizen-network:
+    external: true
