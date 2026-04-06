@@ -1,0 +1,20 @@
+{
+  "status": "healthy",
+  "timestamp": "2024-12-16T00:00:00Z",
+  "version": "1.0.0",
+  "environment": "production",
+  "services": {
+    "nginx": "up",
+    "druid": "up",
+    "postgres": "up",
+    "mongodb": "up",
+    "redis": "up",
+    "zookeeper": "up"
+  },
+  "endpoints": {
+    "main": "http://horizen-network.com",
+    "druid": "http://druid.horizen-network.com",
+    "geniess": "http://geniess.horizen-network.com"
+  },
+  "note": "This is a static health file. For real-time status, use the health-check.sh script with --json flag"
+}

@@ -20,15 +20,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Backup Script
-        uses: appleboy/ssh-action@master
+      - name: Run Backup Script with Retry
+        uses: nick-fields/retry@v2
         with:
-          host: ${{ secrets.PRODUCTION_HOST }}
-          username: ${{ secrets.PRODUCTION_USERNAME }}
-          key: ${{ secrets.PRODUCTION_SSH_KEY }}
-          script: |
-            cd /opt/horizen-network-deploy
-            ./scripts/backup.sh
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 60
+          command: |
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${{ secrets.PRODUCTION_USERNAME }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+              cd /opt/horizen-network-deploy
+              ./scripts/backup.sh
+            EOF
+          on_retry_command: |
+            echo "Backup attempt failed, retrying in 60 seconds..."
 
       - name: Upload Backup to S3
         uses: appleboy/ssh-action@master
@@ -55,7 +59,7 @@ jobs:
             LATEST_BACKUP=$(ls -t backups/*.tar.gz | head -1)
             aws s3 cp "$LATEST_BACKUP" s3://${{ secrets.BACKUP_BUCKET }}/horizen-network/
 
-      - name: Verify Backup
+      - name: Verify Backup Size and Integrity
         uses: appleboy/ssh-action@master
         if: success()
         with:
@@ -64,31 +68,136 @@ jobs:
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
             cd /opt/horizen-network-deploy/backups
-            LATEST_BACKUP=$(ls -t *.tar.gz | head -1)
-            if [ -f "$LATEST_BACKUP" ]; then
-              SIZE=$(stat -f%z "$LATEST_BACKUP" 2>/dev/null || stat -c%s "$LATEST_BACKUP")
-              if [ "$SIZE" -gt 1000 ]; then
-                echo "Backup verified: $LATEST_BACKUP (Size: $SIZE bytes)"
+            
+            # Find latest backup files
+            LATEST_POSTGRES=$(ls -t postgres_*.sql.gz 2>/dev/null | head -1)
+            LATEST_MONGO=$(ls -t mongodb_*.tar.gz 2>/dev/null | head -1)
+            LATEST_CONFIG=$(ls -t config_*.tar.gz 2>/dev/null | head -1)
+            
+            ERRORS=0
+            
+            # Verify PostgreSQL backup
+            if [ -f "$LATEST_POSTGRES" ]; then
+              SIZE=$(stat -c%s "$LATEST_POSTGRES" 2>/dev/null || stat -f%z "$LATEST_POSTGRES")
+              if [ "$SIZE" -gt 10000 ]; then
+                echo "✓ PostgreSQL backup verified: $LATEST_POSTGRES ($(numfmt --to=iec $SIZE))"
+                # Test gunzip
+                if gunzip -t "$LATEST_POSTGRES" 2>/dev/null; then
+                  echo "✓ PostgreSQL backup compression is valid"
+                else
+                  echo "✗ PostgreSQL backup compression is corrupted"
+                  ((ERRORS++))
+                fi
               else
-                echo "Backup file too small, may be corrupt"
-                exit 1
+                echo "✗ PostgreSQL backup too small: $SIZE bytes"
+                ((ERRORS++))
               fi
             else
-              echo "No backup file found"
+              echo "✗ No PostgreSQL backup found"
+              ((ERRORS++))
+            fi
+            
+            # Verify MongoDB backup
+            if [ -f "$LATEST_MONGO" ]; then
+              SIZE=$(stat -c%s "$LATEST_MONGO" 2>/dev/null || stat -f%z "$LATEST_MONGO")
+              if [ "$SIZE" -gt 10000 ]; then
+                echo "✓ MongoDB backup verified: $LATEST_MONGO ($(numfmt --to=iec $SIZE))"
+                # Test tar
+                if tar -tzf "$LATEST_MONGO" > /dev/null 2>&1; then
+                  echo "✓ MongoDB backup archive is valid"
+                else
+                  echo "✗ MongoDB backup archive is corrupted"
+                  ((ERRORS++))
+                fi
+              else
+                echo "✗ MongoDB backup too small: $SIZE bytes"
+                ((ERRORS++))
+              fi
+            else
+              echo "⚠ No MongoDB backup found"
+            fi
+            
+            # Verify config backup
+            if [ -f "$LATEST_CONFIG" ]; then
+              SIZE=$(stat -c%s "$LATEST_CONFIG" 2>/dev/null || stat -f%z "$LATEST_CONFIG")
+              echo "✓ Config backup verified: $LATEST_CONFIG ($(numfmt --to=iec $SIZE))"
+            fi
+            
+            if [ $ERRORS -gt 0 ]; then
+              echo "Backup verification failed with $ERRORS error(s)"
               exit 1
             fi
+            
+            echo "All backups verified successfully"
 
-      - name: Notify Success
+      - name: Send Success Notification
         if: success()
-        run: |
-          echo "Backup completed successfully"
-          # Add notification logic here (Slack, email, etc.)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            BACKUP_SIZE=$(du -sh backups/ | cut -f1)
+            ./scripts/notify.sh "backup_success" "Production backup completed successfully" "Backup size: $BACKUP_SIZE" || true
 
-      - name: Notify Failure
+      - name: Send Slack Notification (Success)
+        if: success() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "✅ Horizen Network Backup Successful",
+              "attachments": [
+                {
+                  "color": "good",
+                  "fields": [
+                    {"title": "Environment", "value": "Production", "short": true},
+                    {"title": "Status", "value": "Success", "short": true},
+                    {"title": "Workflow", "value": "${{ github.workflow }}", "short": true},
+                    {"title": "Time", "value": "${{ github.event.head_commit.timestamp }}", "short": true}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Send Failure Notification
         if: failure()
-        run: |
-          echo "Backup failed!"
-          # Add notification logic here (Slack, email, etc.)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/notify.sh "backup_failed" "Production backup failed" "Check logs for details" || true
+
+      - name: Send Slack Notification (Failure)
+        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ Horizen Network Backup Failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {"title": "Environment", "value": "Production", "short": true},
+                    {"title": "Status", "value": "Failed", "short": true},
+                    {"title": "Workflow", "value": "${{ github.workflow }}", "short": true},
+                    {"title": "Run URL", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
   backup-staging:
     name: Backup Staging Data

@@ -128,6 +128,7 @@ jobs:
     if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     permissions:
       contents: read
+      pull-requests: write
     environment:
       name: staging
       url: https://staging.horizen-network.com
@@ -135,7 +136,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Staging Server
+      - name: Pre-Deployment Validation
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -144,8 +145,42 @@ jobs:
           script: |
             cd /opt/horizen-network-deploy
             git pull origin develop
+            ./scripts/validate.sh || echo "Validation warnings, continuing..."
+
+      - name: Deploy to Staging Server
+        id: deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
             cp .env.staging .env
             ./scripts/deploy.sh dev
+
+      - name: Run Health Check
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            sleep 20
+            ./scripts/health-check.sh
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Staging deployment successful! Check it out at https://staging.horizen-network.com'
+            })
 
   deploy-production:
     name: Deploy to Production
@@ -161,7 +196,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Production Server
+      - name: Send Deployment Started Notification
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/notify.sh "deployment_started" "Production deployment initiated" "Commit: ${{ github.sha }}" || true
+
+      - name: Pre-Deployment Backup
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            echo "Creating pre-deployment backup..."
+            ./scripts/backup.sh || echo "Backup failed but continuing deployment"
+
+      - name: Pre-Deployment Validation
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
@@ -170,10 +226,10 @@ jobs:
           script: |
             cd /opt/horizen-network-deploy
             git pull origin main
-            cp .env.production .env
-            ./scripts/deploy.sh prod
+            ./scripts/validate.sh
 
-      - name: Run Health Check
+      - name: Deploy to Production Server
+        id: deploy
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
@@ -181,13 +237,112 @@ jobs:
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
             cd /opt/horizen-network-deploy
+            cp .env.production .env
+            ./scripts/deploy.sh prod
+
+      - name: Run Health Check
+        id: health_check
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            # Wait for services to stabilize
+            sleep 30
             ./scripts/health-check.sh
 
-      - name: Notify Deployment
+      - name: Run Smoke Tests
         if: success()
-        run: |
-          echo "Deployment to production successful!"
-          # Add notification logic here (Slack, email, etc.)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/test.sh --api
+
+      - name: Rollback on Failure
+        if: failure() && (steps.deploy.outcome == 'failure' || steps.health_check.outcome == 'failure')
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            echo "Deployment failed, initiating rollback..."
+            ./scripts/rollback.sh --auto --yes
+
+      - name: Send Success Notification
+        if: success()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/notify.sh "deployment_completed" "Production deployment successful" "Commit: ${{ github.sha }}" || true
+
+      - name: Send Slack Notification (Success)
+        if: success() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "✅ Production Deployment Successful",
+              "attachments": [
+                {
+                  "color": "good",
+                  "fields": [
+                    {"title": "Environment", "value": "Production", "short": true},
+                    {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
+                    {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                    {"title": "Author", "value": "${{ github.actor }}", "short": true}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Send Failure Notification
+        if: failure()
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USERNAME }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/horizen-network-deploy
+            ./scripts/notify.sh "deployment_failed" "Production deployment failed" "Commit: ${{ github.sha }}, Check logs for details" || true
+
+      - name: Send Slack Notification (Failure)
+        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ Production Deployment Failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {"title": "Environment", "value": "Production", "short": true},
+                    {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
+                    {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                    {"title": "Run URL", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
   security-scan:
     name: Security Scan
